@@ -1,10 +1,12 @@
+import type { NextRequest } from "next/server";
+
 /**
- * Cloudflare Pages Function: lists a public Drive folder (embedded view HTML).
- * Same contract as the dev proxy in src/app/gdrive/list/route.dev.ts.
+ * Music folder listing proxy — runs in dev and on Cloudflare (OpenNext).
+ * Returns the public Drive folder's embedded-view HTML; the client parses
+ * song ids/titles out of it.
  */
-export async function onRequestGet(context) {
-  const url = new URL(context.request.url);
-  const folder = url.searchParams.get("folder") ?? "";
+export async function GET(request: NextRequest) {
+  const folder = request.nextUrl.searchParams.get("folder") ?? "";
   if (!/^[-\w]{10,}$/.test(folder))
     return new Response("Bad folder", { status: 400 });
 

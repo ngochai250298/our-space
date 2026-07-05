@@ -19,18 +19,20 @@ Tài khoản (theo PRD):
 | anh      | 2103     |
 | em       | 2502     |
 
-## Deploy lên Cloudflare Pages
+## Deploy lên Cloudflare (Workers + OpenNext)
 
-Project build ra site tĩnh (`output: "export"`), deploy rất đơn giản:
+Project deploy qua adapter OpenNext (cấu hình sẵn trong `wrangler.jsonc`):
 
-1. Push code lên GitHub.
-2. Cloudflare Dashboard → **Workers & Pages → Create → Pages → Connect to Git**.
-3. Cấu hình build:
-   - **Build command:** `npm run build`
-   - **Build output directory:** `out`
+1. Push code lên GitHub (repo **Private**).
+2. Cloudflare Dashboard → **Workers & Pages → Create → Import a repository**.
+3. Build settings:
+   - **Build command:** `npx opennextjs-cloudflare build`
+   - **Deploy command:** `npx opennextjs-cloudflare deploy`
 4. Deploy. Gắn domain riêng nếu muốn.
 
-> ⚠️ **Lưu ý về vị trí:** Geolocation API chỉ hoạt động trên HTTPS (Cloudflare Pages có sẵn) hoặc localhost.
+Hoặc deploy thẳng từ máy: `npm run deploy` (cần đăng nhập `npx wrangler login`).
+
+> ⚠️ **Lưu ý về vị trí:** Geolocation API chỉ hoạt động trên HTTPS (Cloudflare có sẵn) hoặc localhost.
 
 ## Bật đồng bộ vị trí thật (Supabase)
 
@@ -68,9 +70,8 @@ mục `MUSIC_FOLDER_ID`). Folder phải ở chế độ chia sẻ **"Bất kỳ 
 liên kết"**. Up bài mới vào folder → mở lại web là tự có.
 
 Google chặn phát nhạc Drive trực tiếp từ web khác, nên nhạc đi qua proxy
-`/gdrive/*` của chính app: khi dev là route handler (`src/app/gdrive/`),
-khi deploy là Cloudflare Pages Functions (`functions/gdrive/`) — tự hoạt
-động, không cần cấu hình thêm.
+`/gdrive/*` của chính app (route handler trong `src/app/gdrive/`) — chạy
+cả khi dev lẫn khi deploy, không cần cấu hình thêm.
 
 ## Cấu trúc
 

@@ -1,9 +1,7 @@
 import type { NextRequest } from "next/server";
 
 /**
- * DEV-ONLY audio proxy (the ".dev.ts" extension is only registered while
- * `npm run dev` — production uses the identical Cloudflare Pages Function in
- * functions/gdrive/stream/[id].js).
+ * Audio proxy for the playlist — runs in dev and on Cloudflare (OpenNext).
  *
  * Google blocks <audio> tags on other sites from streaming Drive files
  * (403 on Sec-Fetch-Dest: audio), but serves clean server-side requests
