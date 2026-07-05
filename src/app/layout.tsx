@@ -10,6 +10,20 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Our Space ❤️",
   description: "Khoảng cách chỉ là bản đồ, còn trái tim vẫn ở cạnh nhau.",
+  manifest: "/site.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  // Home-screen shortcut (Safari "Thêm vào MH chính") uses this name + icon.
+  appleWebApp: {
+    capable: true,
+    title: "Our Space",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {

@@ -2,30 +2,32 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Lock } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import type { Letter, Role } from "@/types";
 import { Avatar } from "@/components/Avatar";
 import { displayNameOf } from "@/lib/auth";
-import { formatDateVi, todayIso } from "@/lib/dates";
+import { formatDateTimeVi } from "@/lib/dates";
 
 interface LetterCardProps {
   letter: Letter;
   viewer: Role;
   onRead: () => void;
+  onDelete: () => void;
 }
 
-export function LetterCard({ letter, viewer, onRead }: LetterCardProps) {
+export function LetterCard({ letter, viewer, onRead, onDelete }: LetterCardProps) {
   const [open, setOpen] = useState(false);
-  const locked = letter.unlockDate > todayIso() && letter.to === viewer;
+  const [confirming, setConfirming] = useState(false);
   // In the sent tab, show who the letter went to instead of the sender.
   const headerName =
     letter.from === viewer
       ? `Gửi đến ${displayNameOf(letter.to)}`
       : displayNameOf(letter.from);
   const unreadForMe = letter.to === viewer && !letter.readAt;
+  // Only the sender can take their own letter back.
+  const canDelete = letter.from === viewer;
 
   const toggle = () => {
-    if (locked) return;
     const next = !open;
     setOpen(next);
     if (next) onRead();
@@ -42,25 +44,19 @@ export function LetterCard({ letter, viewer, onRead }: LetterCardProps) {
         <Avatar role={letter.from === viewer ? letter.to : letter.from} size="sm" />
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-semibold">{headerName}</span>
-          <span className="block truncate text-xs text-muted">
-            {locked ? "Lá thư đang được khóa 💗" : letter.title}
-          </span>
-          <span className="block text-[10px] text-muted/80">
-            {formatDateVi(letter.createdAt ? new Date(letter.createdAt).toISOString().slice(0, 10) : letter.unlockDate)}
+          <span className="block truncate text-xs text-muted">{letter.title}</span>
+          <span className="block text-[10px] tabular-nums text-muted/80">
+            {formatDateTimeVi(letter.createdAt)}
           </span>
         </span>
-        {locked ? (
-          <span className="flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-1 text-[10px] font-medium text-primary-strong">
-            <Lock size={11} /> Mở vào {formatDateVi(letter.unlockDate)}
-          </span>
-        ) : unreadForMe ? (
+        {unreadForMe ? (
           <span className="grid size-5 place-items-center rounded-full bg-primary text-[10px] font-bold text-white">
             1
           </span>
         ) : (
           <motion.span
             aria-hidden
-            animate={{ rotate: open ? 0 : 0, scale: open ? 1.1 : 1 }}
+            animate={{ scale: open ? 1.1 : 1 }}
             className="text-lg"
           >
             {open ? "💌" : "✉️"}
@@ -69,7 +65,7 @@ export function LetterCard({ letter, viewer, onRead }: LetterCardProps) {
       </button>
 
       <AnimatePresence initial={false}>
-        {open && !locked && (
+        {open && (
           <motion.div
             key="body"
             initial={{ height: 0, opacity: 0 }}
@@ -82,6 +78,41 @@ export function LetterCard({ letter, viewer, onRead }: LetterCardProps) {
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
                 {letter.body}
               </p>
+
+              {canDelete && (
+                <div className="mt-3 flex justify-end">
+                  {confirming ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-muted">Xóa lá thư này?</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirming(false);
+                          onDelete();
+                        }}
+                        className="rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-white"
+                      >
+                        Xóa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirming(false)}
+                        className="rounded-full px-3 py-1 text-[11px] font-semibold text-muted"
+                      >
+                        Hủy
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirming(true)}
+                      className="flex items-center gap-1 text-[11px] font-medium text-muted transition-colors hover:text-primary-strong"
+                    >
+                      <Trash2 size={13} /> Xóa thư
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </motion.div>
         )}

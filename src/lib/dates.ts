@@ -28,6 +28,25 @@ export function formatDateVi(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
+/** 18:01:32 — local time with seconds. */
+export function formatTimeVi(ts: number): string {
+  const d = new Date(ts);
+  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+    .map((n) => String(n).padStart(2, "0"))
+    .join(":");
+}
+
+/** 05/07/2026 18:01:32 */
+export function formatDateTimeVi(ts: number): string {
+  const d = new Date(ts);
+  const date = [
+    String(d.getDate()).padStart(2, "0"),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    d.getFullYear(),
+  ].join("/");
+  return `${date} ${formatTimeVi(ts)}`;
+}
+
 export function formatTimeIn(timeZone: string, date = new Date()): string {
   return new Intl.DateTimeFormat("vi-VN", {
     hour: "2-digit",

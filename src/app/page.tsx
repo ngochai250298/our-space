@@ -140,7 +140,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-10 text-xs text-muted">&ldquo;Only for Hải &amp; Bình&rdquo;</p>
+          <p className="mt-10 text-xs text-muted">&ldquo;Only for Bình &amp; family&rdquo;</p>
         </motion.main>
       )}
     </AnimatePresence>

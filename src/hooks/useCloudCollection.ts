@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@/types";
 import { useCollection } from "@/hooks/useCollection";
 import { loadItem, saveItem } from "@/lib/storage";
-import { getSupabase } from "@/lib/supabase";
+import { getSupabase, liveTopic } from "@/lib/supabase";
 
 /**
  * Generic cloud-backed collection (same pattern as the diary):
@@ -67,7 +67,7 @@ export function useCloudCollection<T extends { id: string }>(
     if (!sb) return;
     void refresh();
     const channel = sb
-      .channel(`${spec.table}-live`)
+      .channel(liveTopic(`${spec.table}-live`))
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: spec.table },

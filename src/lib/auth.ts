@@ -21,10 +21,10 @@ interface Account {
 const ACCOUNTS: Account[] = [
   { username: "hai", password: "2103", role: "anh", displayName: "Hải", kind: "couple", gender: "male" },
   { username: "binh", password: "2502", role: "em", displayName: "Bình", kind: "couple", gender: "female" },
-  { username: "thuong", password: "0000", role: "thuong", displayName: "Thuong", kind: "family", gender: "female" },
-  { username: "thuan", password: "0000", role: "thuan", displayName: "Thuan", kind: "family", gender: "male" },
+  { username: "thuong", password: "0000", role: "thuong", displayName: "Thương", kind: "family", gender: "female" },
+  { username: "thuan", password: "0000", role: "thuan", displayName: "Thuận", kind: "family", gender: "male" },
   { username: "nhinhi", password: "0000", role: "nhinhi", displayName: "Nhinhi", kind: "family", gender: "female" },
-  { username: "thinh", password: "0000", role: "thinh", displayName: "Thinh", kind: "family", gender: "male" },
+  { username: "thinh", password: "0000", role: "thinh", displayName: "Thịnh", kind: "family", gender: "male" },
 ];
 
 const SESSION_KEY = "session";
@@ -105,6 +105,11 @@ export function changePassword(role: Role, oldPassword: string, newPassword: str
   const overrides = loadItem<Partial<Record<Role, string>>>(PASSWORD_OVERRIDE_KEY, {});
   saveItem(PASSWORD_OVERRIDE_KEY, { ...overrides, [role]: newPassword });
   return true;
+}
+
+/** Hải is the admin — can delete anyone's photos and diary entries. */
+export function isAdmin(role: Role): boolean {
+  return role === "anh";
 }
 
 /** The other half — only meaningful for the couple. */

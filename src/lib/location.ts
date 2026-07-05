@@ -2,7 +2,7 @@
 
 import type { LiveLocation, Role } from "@/types";
 import { loadItem, saveItem } from "@/lib/storage";
-import { getSupabase } from "@/lib/supabase";
+import { getSupabase, liveTopic } from "@/lib/supabase";
 
 const KEY = "locations";
 
@@ -128,7 +128,7 @@ export function subscribeLocations(
     });
 
   const channel = sb
-    .channel("locations-live")
+    .channel(liveTopic("locations-live"))
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "locations" },

@@ -1,12 +1,15 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Trash2, X, CloudUpload } from "lucide-react";
+import { motion } from "framer-motion";
+import { Plus, CloudUpload } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { PhotoLightbox } from "@/components/PhotoLightbox";
 import { useSession } from "@/hooks/useSession";
 import type { Photo } from "@/types";
+import { displayNameOf, isAdmin } from "@/lib/auth";
+import { formatDateTimeVi } from "@/lib/dates";
 import { fileToDataUrl } from "@/features/gallery/imageUtils";
 import { usePhotos } from "@/features/gallery/usePhotos";
 
@@ -140,53 +143,28 @@ export default function GalleryPage() {
         </div>
       )}
 
-      {/* Lightbox */}
-      <AnimatePresence>
-        {viewer && (
-          <motion.div
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/85 p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setViewer(null)}
-          >
-            <motion.img
-              src={viewer.url}
-              alt={viewer.caption ?? "Kỷ niệm"}
-              className="max-h-[75dvh] w-auto max-w-full rounded-2xl object-contain"
-              initial={{ scale: 0.92 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.92 }}
-              onClick={(e) => e.stopPropagation()}
-            />
-            <div className="mt-4 flex items-center gap-3">
-              <button
-                type="button"
-                aria-label="Đóng"
-                onClick={() => setViewer(null)}
-                className="grid size-10 place-items-center rounded-full bg-white/15 text-white"
-              >
-                <X size={18} />
-              </button>
-              {viewer.uploadedBy === session.role && (
-                <button
-                  type="button"
-                  aria-label="Xóa ảnh"
-                  onClick={() => {
-                    if (window.confirm("Xóa bức ảnh này?")) {
-                      void removePhoto(viewer);
-                      setViewer(null);
-                    }
-                  }}
-                  className="grid size-10 place-items-center rounded-full bg-white/15 text-white"
-                >
-                  <Trash2 size={18} />
-                </button>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Lightbox — everyone can download; delete = owner or admin (Hải) */}
+      <PhotoLightbox
+        src={viewer?.url ?? null}
+        alt={viewer?.caption ?? "Kỷ niệm"}
+        subtitle={
+          viewer
+            ? `${displayNameOf(viewer.uploadedBy)} · ${formatDateTimeVi(viewer.createdAt)}`
+            : undefined
+        }
+        onClose={() => setViewer(null)}
+        onDelete={
+          viewer &&
+          (viewer.uploadedBy === session.role || isAdmin(session.role))
+            ? () => {
+                if (window.confirm("Xóa bức ảnh này?")) {
+                  void removePhoto(viewer);
+                  setViewer(null);
+                }
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }

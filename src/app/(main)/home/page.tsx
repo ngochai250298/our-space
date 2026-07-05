@@ -101,7 +101,8 @@ export default function HomePage() {
   ).length;
   const together = daysTogether(settings.anniversary);
   const untilMeeting = daysUntil(settings.nextMeeting);
-  const meetingDay = Number(settings.nextMeeting.split("-")[2]);
+  // Countdown reached zero → it's reunion day (or later).
+  const reunionArrived = untilMeeting <= 0;
 
   return (
     <motion.div
@@ -150,25 +151,39 @@ export default function HomePage() {
       )}
 
       {/* Countdown — everyone looks forward to the reunion */}
-      <section className="card flex items-center justify-between p-5">
-        <div>
-          <p className="text-[11px] text-muted">Sắp tới</p>
-          <p className="mt-0.5 text-sm font-semibold">
-            {settings.nextMeetingLabel}
-          </p>
-          <p className="mt-0.5 text-xs text-muted">
-            {untilMeeting >= 0
-              ? `còn ${untilMeeting} ngày nữa`
-              : "đã qua — hẹn lần tới nhé"}
-          </p>
-        </div>
-        <div className="relative">
-          <div className="card grid size-14 place-items-center border border-line text-xl font-bold text-primary-strong">
-            {meetingDay}
+      <section className="card p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[11px] text-muted">Sắp tới</p>
+            <p className="mt-0.5 text-sm font-semibold">
+              {settings.nextMeetingLabel}
+            </p>
+            <p className="mt-0.5 text-xs text-muted">
+              {reunionArrived
+                ? "Ngày gặp nhau đã tới! 🎉"
+                : `còn ${untilMeeting} ngày nữa`}
+            </p>
           </div>
-          <span className="absolute -right-2 -top-2 text-sm" aria-hidden>💗</span>
-          <span className="absolute -bottom-2 -right-1 text-xs" aria-hidden>💗</span>
+          <div className="relative">
+            <div className="card grid size-14 place-items-center border border-line font-bold text-primary-strong">
+              {reunionArrived ? (
+                <span className="text-2xl" aria-hidden>
+                  🎉
+                </span>
+              ) : (
+                <span className="text-lg tabular-nums">{untilMeeting}</span>
+              )}
+            </div>
+            <span className="absolute -right-2 -top-2 text-sm" aria-hidden>💗</span>
+            <span className="absolute -bottom-2 -right-1 text-xs" aria-hidden>💗</span>
+          </div>
         </div>
+
+        {reunionArrived && (
+          <p className="mt-3 rounded-xl bg-primary-soft px-3 py-2 text-center text-xs font-semibold text-primary-strong">
+            🎊 Bình đang trên đường về đó nha
+          </p>
+        )}
       </section>
 
       {/* Distance & clocks */}

@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Modal } from "@/components/Modal";
 import { Avatar } from "@/components/Avatar";
 import { Input, PrimaryButton } from "@/components/Field";
+import { DateField } from "@/components/DateField";
 import { useSession } from "@/hooks/useSession";
 import { useSettings } from "@/hooks/useSettings";
 import { changePassword, logout, partnerName } from "@/lib/auth";
@@ -38,6 +39,7 @@ export default function SettingsPage() {
 
   const [anniversary, setAnniversary] = useState(settings.anniversary);
   const [nextMeeting, setNextMeeting] = useState(settings.nextMeeting);
+  const [datesSaved, setDatesSaved] = useState(false);
 
   const [syncUrl, setSyncUrl] = useState("");
   const [syncKey, setSyncKey] = useState("");
@@ -60,7 +62,11 @@ export default function SettingsPage() {
 
   const submitDates = () => {
     updateSettings({ anniversary, nextMeeting });
-    setModal(null);
+    setDatesSaved(true);
+    window.setTimeout(() => {
+      setDatesSaved(false);
+      setModal(null);
+    }, 900);
   };
 
   const submitSync = async () => {
@@ -227,21 +233,22 @@ export default function SettingsPage() {
       {/* Dates */}
       <Modal open={modal === "dates"} title="Những ngày quan trọng 💗" onClose={() => setModal(null)}>
         <div className="space-y-4">
-          <Input
+          <DateField
             label="Ngày bắt đầu yêu nhau"
-            type="date"
             value={anniversary}
-            onChange={(e) => setAnniversary(e.target.value)}
+            onChange={setAnniversary}
           />
-          <Input
+          <DateField
             label="Ngày gặp nhau lần tới"
-            type="date"
             value={nextMeeting}
-            onChange={(e) => setNextMeeting(e.target.value)}
+            onChange={setNextMeeting}
           />
-          <PrimaryButton type="button" onClick={submitDates}>
-            Lưu
+          <PrimaryButton type="button" onClick={submitDates} disabled={datesSaved}>
+            {datesSaved ? "Đã lưu ✓" : "Lưu"}
           </PrimaryButton>
+          <p className="text-center text-[11px] text-muted">
+            Chỉ Hải và Bình chỉnh được — ngày này hiện chung cho cả nhà.
+          </p>
         </div>
       </Modal>
 
@@ -293,7 +300,7 @@ export default function SettingsPage() {
             còn trái tim vẫn ở cạnh nhau.&rdquo;
           </p>
           <p className="text-xs text-muted">
-            Từ {formatDateVi(settings.anniversary)} · Only for Hải &amp; Bình
+            Từ {formatDateVi(settings.anniversary)} · Only for Bình &amp; family
           </p>
         </div>
       </Modal>

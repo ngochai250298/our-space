@@ -1,7 +1,7 @@
 "use client";
 
 import type { DiaryEntry, Role } from "@/types";
-import { getSupabase } from "@/lib/supabase";
+import { getSupabase, liveTopic } from "@/lib/supabase";
 
 /**
  * Cloud diary: rows in the "diary" table (see supabase/migration2_gallery.sql).
@@ -90,7 +90,7 @@ export function subscribeDiary(onChange: () => void): () => void {
   const sb = getSupabase();
   if (!sb) return () => {};
   const channel = sb
-    .channel("diary-live")
+    .channel(liveTopic("diary-live"))
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "diary" },

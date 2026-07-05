@@ -10,19 +10,17 @@ import { useSession } from "@/hooks/useSession";
 import { useLetters } from "@/features/letters/useLetters";
 import { allAccounts, partnerOf } from "@/lib/auth";
 import type { Letter, Role } from "@/types";
-import { todayIso } from "@/lib/dates";
 import { LetterCard } from "@/features/letters/LetterCard";
 
 type Tab = "inbox" | "sent";
 
 export default function LettersPage() {
   const session = useSession();
-  const { items, ready, cloudError, add, update } = useLetters(session);
+  const { items, ready, cloudError, add, update, remove } = useLetters(session);
   const [tab, setTab] = useState<Tab>("inbox");
   const [composing, setComposing] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [unlockDate, setUnlockDate] = useState(todayIso());
   const [recipients, setRecipients] = useState<Role[]>([]);
 
   // A letter is only visible to its sender and its chosen recipient.
@@ -44,7 +42,6 @@ export default function LettersPage() {
     setRecipients(partner ? [partner] : []);
     setTitle("");
     setBody("");
-    setUnlockDate(todayIso());
     setComposing(true);
   };
 
@@ -64,7 +61,6 @@ export default function LettersPage() {
         to,
         title: title.trim(),
         body: body.trim(),
-        unlockDate,
         createdAt: Date.now(),
       });
     }
@@ -131,6 +127,7 @@ export default function LettersPage() {
               if (letter.to === session.role && !letter.readAt)
                 void update(letter.id, { readAt: Date.now() });
             }}
+            onDelete={() => void remove(letter.id)}
           />
         ))}
       </div>
@@ -182,12 +179,6 @@ export default function LettersPage() {
             rows={6}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-          />
-          <Input
-            label="Ngày được mở (khóa đến ngày này)"
-            type="date"
-            value={unlockDate}
-            onChange={(e) => setUnlockDate(e.target.value)}
           />
           <PrimaryButton
             type="button"

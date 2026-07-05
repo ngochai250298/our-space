@@ -6,11 +6,12 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
+import { PhotoLightbox } from "@/components/PhotoLightbox";
 import { useSession } from "@/hooks/useSession";
 import type { DiaryEntry, Photo, Role } from "@/types";
-import { formatDateVi } from "@/lib/dates";
+import { formatDateVi, formatTimeVi } from "@/lib/dates";
 import { loadItem, saveItem, newId } from "@/lib/storage";
-import { displayNameOf } from "@/lib/auth";
+import { displayNameOf, isAdmin } from "@/lib/auth";
 import { MonthCalendar } from "@/features/diary/MonthCalendar";
 import { DiaryCompose } from "@/features/diary/DiaryCompose";
 import { useDiary } from "@/features/diary/useDiary";
@@ -39,6 +40,7 @@ export default function DiaryPage() {
   const [composing, setComposing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [viewer, setViewer] = useState<{ src: string; entry: DiaryEntry } | null>(null);
 
   const sorted = useMemo(
     () =>
@@ -151,21 +153,25 @@ export default function DiaryPage() {
                 <p className="text-xs font-semibold">
                   {displayNameOf(entry.author)}
                 </p>
-                <p className="text-[11px] text-muted">{formatDateVi(entry.date)}</p>
+                <p className="text-[11px] text-muted">
+                  {formatDateVi(entry.date)} · {formatTimeVi(entry.createdAt)}
+                </p>
               </div>
-              {entry.author === session.role && (
+              {(entry.author === session.role || isAdmin(session.role)) && (
                 <div className="flex gap-1">
-                  <button
-                    type="button"
-                    aria-label="Sửa"
-                    onClick={() => {
-                      setEditing(entry);
-                      setComposing(true);
-                    }}
-                    className="grid size-8 place-items-center rounded-full text-muted hover:bg-primary-soft hover:text-ink"
-                  >
-                    <Pencil size={14} />
-                  </button>
+                  {entry.author === session.role && (
+                    <button
+                      type="button"
+                      aria-label="Sửa"
+                      onClick={() => {
+                        setEditing(entry);
+                        setComposing(true);
+                      }}
+                      className="grid size-8 place-items-center rounded-full text-muted hover:bg-primary-soft hover:text-ink"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     aria-label="Xóa"
@@ -185,27 +191,38 @@ export default function DiaryPage() {
               {entry.content}
             </p>
 
-            {/* Chỉ nhật ký có ảnh mới hiện khung ảnh */}
+            {/* Chỉ nhật ký có ảnh mới hiện khung ảnh — bấm vào để xem to */}
             {entry.photos.length === 1 && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={entry.photos[0]}
-                alt="Ảnh nhật ký"
-                loading="lazy"
-                className="mt-3 max-h-64 w-full rounded-2xl object-cover"
-              />
+              <button
+                type="button"
+                className="mt-3 w-full"
+                onClick={() => setViewer({ src: entry.photos[0], entry })}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={entry.photos[0]}
+                  alt="Ảnh nhật ký"
+                  loading="lazy"
+                  className="max-h-64 w-full rounded-2xl object-cover"
+                />
+              </button>
             )}
             {entry.photos.length > 1 && (
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {entry.photos.map((src, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <button
                     key={i}
-                    src={src}
-                    alt={`Ảnh nhật ký ${i + 1}`}
-                    loading="lazy"
-                    className="aspect-square w-full rounded-xl object-cover"
-                  />
+                    type="button"
+                    onClick={() => setViewer({ src, entry })}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={src}
+                      alt={`Ảnh nhật ký ${i + 1}`}
+                      loading="lazy"
+                      className="aspect-square w-full rounded-xl object-cover"
+                    />
+                  </button>
                 ))}
               </div>
             )}
@@ -219,6 +236,18 @@ export default function DiaryPage() {
         busy={saving}
         onClose={() => setComposing(false)}
         onSubmit={(values) => void submit(values)}
+      />
+
+      {/* Xem ảnh to + tải về, giống Gallery */}
+      <PhotoLightbox
+        src={viewer?.src ?? null}
+        alt="Ảnh nhật ký"
+        subtitle={
+          viewer
+            ? `${displayNameOf(viewer.entry.author)} · ${formatDateVi(viewer.entry.date)} · ${formatTimeVi(viewer.entry.createdAt)}`
+            : undefined
+        }
+        onClose={() => setViewer(null)}
       />
     </div>
   );

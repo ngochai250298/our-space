@@ -14,7 +14,7 @@ import {
   subscribeLocations,
 } from "@/lib/location";
 import { getSupabaseConfig } from "@/lib/supabase";
-import { displayNameOf, genderOf, partnerOf } from "@/lib/auth";
+import { displayNameOf, genderOf } from "@/lib/auth";
 import { distanceKm, formatKm } from "@/lib/geo";
 import { placeLabel } from "@/lib/geocode";
 
@@ -73,16 +73,17 @@ export function LiveMap({ session }: { session: Session }) {
   // Resolved place names ("TP.HCM, Phường Thạnh Mỹ Tây, Việt Nam") per person.
   const labelsRef = useRef<Partial<Record<Role, string>>>({});
   const [km, setKm] = useState<number | null>(null);
-  const [partnerInfo, setPartnerInfo] = useState<{ approx: boolean; updatedAt: number } | null>(null);
+  const [targetInfo, setTargetInfo] = useState<{ approx: boolean; updatedAt: number } | null>(null);
   const [geoError, setGeoError] = useState("");
   const synced = getSupabaseConfig() !== null;
-  const isFamily = session.kind === "family";
+  // Everyone's dashed line points to Bình — except Bình herself, whose
+  // line points to Hải.
+  const target: Role = session.role === "em" ? "anh" : "em";
 
   useEffect(() => {
     if (!ready || !containerRef.current || mapRef.current) return;
 
     const me = session.role;
-    const partner = partnerOf(me);
     let disposed = false;
     let intervalId = 0;
     let unsubscribe: (() => void) | undefined;
@@ -160,9 +161,10 @@ export function LiveMap({ session }: { session: Session }) {
           }
         });
 
-        // The dashed line + distance stay between the couple.
-        const a = locs.anh;
-        const b = locs.em;
+        // The dashed line + distance run from the viewer to their target
+        // (everyone → Bình; Bình → Hải).
+        const a = locs[me];
+        const b = locs[target];
         if (a && b) {
           const points: [number, number][] = [
             [a.lat, a.lng],
@@ -176,14 +178,10 @@ export function LiveMap({ session }: { session: Session }) {
               dashArray: "2 8",
             }).addTo(map);
           setKm(distanceKm(a.lat, a.lng, b.lat, b.lng));
-          if (partner) {
-            const partnerLoc = locs[partner];
-            if (partnerLoc)
-              setPartnerInfo({
-                approx: partnerLoc.approx === true,
-                updatedAt: partnerLoc.updatedAt,
-              });
-          }
+          setTargetInfo({
+            approx: b.approx === true,
+            updatedAt: b.updatedAt,
+          });
         }
       };
 
@@ -262,29 +260,26 @@ export function LiveMap({ session }: { session: Session }) {
         </p>
       )}
 
-      {/* Distance card — always the couple's distance */}
+      {/* Distance card — from the viewer to their target */}
       <div className="card absolute inset-x-4 bottom-4 z-[1000] px-4 py-3.5 text-center">
         <p className="text-xs text-muted">
-          {isFamily
-            ? `Khoảng cách ${displayNameOf("anh")} & ${displayNameOf("em")}`
-            : "Khoảng cách giữa hai chúng ta"}
-          {!isFamily && partnerInfo?.approx && (
+          Khoảng cách chúng ta
+          {targetInfo?.approx && (
             <span className="text-muted/80"> (gần đúng)</span>
           )}
         </p>
         <p className="mt-0.5 text-2xl font-bold tracking-tight text-ink">
           {km === null ? "…" : `${formatKm(km)} km`} <span aria-hidden>❤️</span>
         </p>
-        {!isFamily && partnerInfo && !partnerInfo.approx && (
+        {targetInfo && !targetInfo.approx && (
           <p className="mt-0.5 text-[11px] text-muted">
-            Vị trí {displayNameOf(partnerOf(session.role)!)} cập nhật{" "}
-            {timeAgo(partnerInfo.updatedAt)}
+            Vị trí {displayNameOf(target)} cập nhật {timeAgo(targetInfo.updatedAt)}
           </p>
         )}
-        {!isFamily && partnerInfo?.approx && (
+        {targetInfo?.approx && (
           <p className="mt-0.5 text-[11px] text-muted">
             {synced ? (
-              <>Chờ {displayNameOf(partnerOf(session.role)!)} mở web để có vị trí thật 💗</>
+              <>Chờ {displayNameOf(target)} mở web để có vị trí thật 💗</>
             ) : (
               <>
                 Bật đồng bộ trong{" "}

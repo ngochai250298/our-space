@@ -2,7 +2,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Photo, Role } from "@/types";
-import { getSupabase } from "@/lib/supabase";
+import { getSupabase, liveTopic } from "@/lib/supabase";
 
 /**
  * Cloud gallery: files live in the Supabase Storage bucket "photos",
@@ -82,7 +82,7 @@ export function subscribeGallery(onChange: () => void): () => void {
   const sb = getSupabase();
   if (!sb) return () => {};
   const channel = sb
-    .channel("gallery-live")
+    .channel(liveTopic("gallery-live"))
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "gallery" },

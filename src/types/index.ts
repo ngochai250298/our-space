@@ -32,8 +32,6 @@ export interface Letter {
   to: Role;
   title: string;
   body: string;
-  /** ISO date the letter can be opened */
-  unlockDate: string;
   createdAt: number;
   readAt?: number;
 }

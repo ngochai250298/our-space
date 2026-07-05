@@ -1,0 +1,69 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Soft app background: pink → lavender/blue -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fdeef4"/>
+      <stop offset="0.5" stop-color="#f3eefb"/>
+      <stop offset="1" stop-color="#e6ecfc"/>
+    </linearGradient>
+    <!-- Night sky inside the heart -->
+    <linearGradient id="sky" x1="300" y1="220" x2="740" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ec5f9f"/>
+      <stop offset="0.55" stop-color="#9a5fce"/>
+      <stop offset="1" stop-color="#5b57cf"/>
+    </linearGradient>
+    <!-- Heart border band: pink → blue -->
+    <linearGradient id="band" x1="240" y1="220" x2="790" y2="660" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f7a0c4"/>
+      <stop offset="0.5" stop-color="#e98cc6"/>
+      <stop offset="1" stop-color="#7f9bf1"/>
+    </linearGradient>
+    <linearGradient id="house" x1="440" y1="408" x2="584" y2="566" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#fbeef4"/>
+    </linearGradient>
+    <linearGradient id="win" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffcf8f"/>
+      <stop offset="1" stop-color="#f7a24e"/>
+    </linearGradient>
+    <path id="heart" d="M512 652 C512 652 246 470 246 340 C246 264 306 214 376 214 C446 214 490 270 512 306 C534 270 578 214 648 214 C718 214 778 264 778 340 C778 470 512 652 512 652 Z"/>
+  </defs>
+
+  <!-- Full-bleed background (iOS applies its own rounded mask) -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- Heart interior = night sky -->
+  <use href="#heart" fill="url(#sky)"/>
+
+  <!-- Stars + moon inside the heart -->
+  <g fill="#ffffff">
+    <path d="M402 300 a44 44 0 1 1 -20 -38 a34 34 0 1 0 20 38 Z" opacity="0.96"/>
+    <circle cx="600" cy="300" r="7"/>
+    <circle cx="650" cy="340" r="4.5"/>
+    <circle cx="560" cy="270" r="4"/>
+    <circle cx="470" cy="370" r="3.5" opacity="0.85"/>
+    <circle cx="628" cy="392" r="3" opacity="0.8"/>
+    <path d="M690 268 l6 16 l16 6 l-16 6 l-6 16 l-6 -16 l-16 -6 l16 -6 Z"/>
+  </g>
+
+  <!-- Little house tucked into the bottom of the heart -->
+  <path d="M512 402 L590 468 Q596 473 594 483 L576 566 Q574 574 566 574 L458 574 Q450 574 448 566 L430 483 Q428 473 434 468 Z"
+        fill="url(#house)" stroke="#f2d9e6" stroke-width="3" stroke-linejoin="round"/>
+  <!-- Warm window (2×2) -->
+  <g fill="url(#win)">
+    <rect x="486" y="496" width="20" height="20" rx="4"/>
+    <rect x="514" y="496" width="20" height="20" rx="4"/>
+    <rect x="486" y="524" width="20" height="20" rx="4"/>
+    <rect x="514" y="524" width="20" height="20" rx="4"/>
+  </g>
+
+  <!-- Heart border band on top -->
+  <use href="#heart" fill="none" stroke="url(#band)" stroke-width="66" stroke-linejoin="round"/>
+
+  <!-- Wordmark -->
+  <text x="512" y="812" text-anchor="middle"
+        font-family="'Segoe UI', 'Nunito', Arial, sans-serif" font-weight="800"
+        font-size="118" letter-spacing="1" fill="#1e2650">our space</text>
+  <path d="M512 862 c-12 -20 -44 -14 -44 10 c0 18 24 32 44 48 c20 -16 44 -30 44 -48 c0 -24 -32 -30 -44 -10 Z"
+        fill="#f97eb0"/>
+</svg>

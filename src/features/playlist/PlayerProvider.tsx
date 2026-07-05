@@ -7,6 +7,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { Role } from "@/types";
+import { getSession } from "@/lib/auth";
 import type { DriveSong } from "@/features/playlist/driveMusic";
 import { cachedSongs, fetchSongs } from "@/features/playlist/driveMusic";
 import { usePlayer } from "@/features/playlist/usePlayer";
@@ -22,15 +24,19 @@ const PlayerContext = createContext<PlayerValue | null>(null);
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const [songs, setSongs] = useState<DriveSong[]>([]);
+  // Whose music is this? Each account keeps its own song / position / shuffle,
+  // so one person changing tracks never touches another's playback.
+  const [role, setRole] = useState<Role | null>(null);
 
   // Cached list plays instantly; Drive is re-read in the background so songs
   // newly uploaded to the folder appear on their own.
   useEffect(() => {
+    setRole(getSession()?.role ?? null);
     setSongs(cachedSongs());
     void fetchSongs().then(setSongs);
   }, []);
 
-  const player = usePlayer(songs);
+  const player = usePlayer(songs, role);
 
   return (
     <PlayerContext.Provider value={{ ...player, songs }}>

@@ -13,7 +13,6 @@ interface LetterRow {
   to_role: Role;
   title: string;
   body: string;
-  unlock_date: string;
   created_at: string;
   read_at: string | null;
 }
@@ -32,7 +31,6 @@ const SPEC: CloudSpec<Letter> = {
       to: row.to_role,
       title: row.title,
       body: row.body,
-      unlockDate: row.unlock_date,
       createdAt: new Date(row.created_at).getTime(),
       readAt: row.read_at ? new Date(row.read_at).getTime() : undefined,
     };
@@ -42,7 +40,9 @@ const SPEC: CloudSpec<Letter> = {
     to_role: letter.to,
     title: letter.title,
     body: letter.body,
-    unlock_date: letter.unlockDate,
+    // Legacy NOT NULL column, no longer used — fill it with the send date so
+    // inserts keep working without a schema change.
+    unlock_date: new Date(letter.createdAt).toISOString().slice(0, 10),
     created_at: new Date(letter.createdAt).toISOString(),
     read_at: letter.readAt ? new Date(letter.readAt).toISOString() : null,
   }),

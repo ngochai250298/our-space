@@ -1,11 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Role } from "@/types";
 import type { DriveSong } from "@/features/playlist/driveMusic";
 import { streamUrl } from "@/features/playlist/driveMusic";
+import { loadItem, saveItem } from "@/lib/storage";
+
+/** Per-account listening state — each person's music is their own. */
+interface SavedPlayerState {
+  songId: string;
+  time: number;
+  shuffle: boolean;
+  repeatOne: boolean;
+}
+
+const SAVE_EVERY_MS = 5_000;
 
 /** One shared <audio> element driving the whole player UI. */
-export function usePlayer(songs: DriveSong[]) {
+export function usePlayer(songs: DriveSong[], role: Role | null) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const indexRef = useRef<number | null>(null);
   const shuffleRef = useRef(true);
@@ -14,6 +26,10 @@ export function usePlayer(songs: DriveSong[]) {
   const nextRef = useRef<() => void>(() => {});
   // Autoplay was blocked by the browser → start on the first tap anywhere.
   const pendingAutoplayRef = useRef(false);
+  // Resume position (after a reload) applied once metadata is loaded.
+  const pendingSeekRef = useRef<number | null>(null);
+  const stateKeyRef = useRef<string | null>(null);
+  const lastSaveRef = useRef(0);
 
   const [index, setIndex] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -24,29 +40,50 @@ export function usePlayer(songs: DriveSong[]) {
   const [loading, setLoading] = useState(false);
 
   songsRef.current = songs;
+  stateKeyRef.current = role ? `player.${role}` : null;
 
-  const playIndex = useCallback((i: number, opts?: { auto?: boolean }) => {
-    const audio = audioRef.current;
+  const saveState = useCallback(() => {
+    const key = stateKeyRef.current;
     const list = songsRef.current;
-    if (!audio || !list[i]) return;
-    indexRef.current = i;
-    setIndex(i);
-    setTime(0);
-    setDuration(0);
-    setLoading(true);
-    audio.src = streamUrl(list[i].id);
-    if ("mediaSession" in navigator) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: list[i].title,
-        artist: "Our Space ❤️",
-      });
-    }
-    void audio.play().catch(() => {
-      setPlaying(false);
-      // The browser wants a user gesture first — remember to start then.
-      if (opts?.auto) pendingAutoplayRef.current = true;
-    });
+    const i = indexRef.current;
+    if (!key || i === null || !list[i]) return;
+    const state: SavedPlayerState = {
+      songId: list[i].id,
+      time: audioRef.current?.currentTime ?? 0,
+      shuffle: shuffleRef.current,
+      repeatOne: repeatOneRef.current,
+    };
+    saveItem(key, state);
+    lastSaveRef.current = Date.now();
   }, []);
+
+  const playIndex = useCallback(
+    (i: number, opts?: { auto?: boolean }) => {
+      const audio = audioRef.current;
+      const list = songsRef.current;
+      if (!audio || !list[i]) return;
+      indexRef.current = i;
+      setIndex(i);
+      setTime(0);
+      setDuration(0);
+      setLoading(true);
+      if (!opts?.auto) pendingSeekRef.current = null;
+      audio.src = streamUrl(list[i].id);
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: list[i].title,
+          artist: "Our Space ❤️",
+        });
+      }
+      saveState();
+      void audio.play().catch(() => {
+        setPlaying(false);
+        // The browser wants a user gesture first — remember to start then.
+        if (opts?.auto) pendingAutoplayRef.current = true;
+      });
+    },
+    [saveState]
+  );
 
   const next = useCallback(() => {
     const list = songsRef.current;
@@ -86,31 +123,51 @@ export function usePlayer(songs: DriveSong[]) {
     else audio.pause();
   }, []);
 
-  const seek = useCallback((t: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = t;
-    setTime(t);
-  }, []);
+  const seek = useCallback(
+    (t: number) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.currentTime = t;
+      setTime(t);
+      saveState();
+    },
+    [saveState]
+  );
 
   const toggleShuffle = useCallback(() => {
     shuffleRef.current = !shuffleRef.current;
     setShuffle(shuffleRef.current);
-  }, []);
+    saveState();
+  }, [saveState]);
 
   const toggleRepeatOne = useCallback(() => {
     repeatOneRef.current = !repeatOneRef.current;
     setRepeatOne(repeatOneRef.current);
-  }, []);
+    saveState();
+  }, [saveState]);
 
   useEffect(() => {
     const audio = new Audio();
     audio.preload = "metadata";
     audioRef.current = audio;
-    const onTime = () => setTime(audio.currentTime);
-    const onMeta = () => setDuration(audio.duration || 0);
+    const onTime = () => {
+      setTime(audio.currentTime);
+      // Keep the per-account resume point fresh while playing.
+      if (Date.now() - lastSaveRef.current > SAVE_EVERY_MS) saveState();
+    };
+    const onMeta = () => {
+      setDuration(audio.duration || 0);
+      if (pendingSeekRef.current !== null) {
+        audio.currentTime = pendingSeekRef.current;
+        setTime(pendingSeekRef.current);
+        pendingSeekRef.current = null;
+      }
+    };
     const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
+    const onPause = () => {
+      setPlaying(false);
+      saveState();
+    };
     const onCanPlay = () => setLoading(false);
     const onEnded = () => {
       if (repeatOneRef.current) {
@@ -137,14 +194,32 @@ export function usePlayer(songs: DriveSong[]) {
       audio.removeEventListener("ended", onEnded);
       audioRef.current = null;
     };
-  }, []);
+  }, [saveState]);
 
-  // A random song greets you right after login. If the browser blocks
-  // autoplay, the very first tap anywhere in the app starts the music.
+  // Music greets you on every visit: resume this account's last song at the
+  // saved position, or pick a random one on a fresh start. If the browser
+  // blocks autoplay, the very first tap anywhere starts the sound.
   useEffect(() => {
-    if (indexRef.current === null && songs.length)
+    if (indexRef.current !== null || !songs.length) return;
+    const saved = stateKeyRef.current
+      ? loadItem<SavedPlayerState | null>(stateKeyRef.current, null)
+      : null;
+    if (saved) {
+      shuffleRef.current = saved.shuffle;
+      setShuffle(saved.shuffle);
+      repeatOneRef.current = saved.repeatOne;
+      setRepeatOne(saved.repeatOne);
+    }
+    const savedIndex = saved
+      ? songs.findIndex((s) => s.id === saved.songId)
+      : -1;
+    if (savedIndex >= 0) {
+      pendingSeekRef.current = saved && saved.time > 3 ? saved.time : null;
+      playIndex(savedIndex, { auto: true });
+    } else {
       playIndex(Math.floor(Math.random() * songs.length), { auto: true });
-  }, [songs, playIndex]);
+    }
+  }, [songs, playIndex, role]);
 
   useEffect(() => {
     const resume = () => {

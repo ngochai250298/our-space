@@ -46,6 +46,16 @@ export function getSupabase(): SupabaseClient | null {
   return client;
 }
 
+// Realtime channels dedupe by topic and removeChannel() is async, so a fixed
+// topic gets reused mid-teardown in React StrictMode (dev) and throws
+// "cannot add postgres_changes callbacks after subscribe()". Give every
+// subscription its own topic.
+let liveSeq = 0;
+export function liveTopic(base: string): string {
+  liveSeq += 1;
+  return `${base}-${liveSeq}`;
+}
+
 /** Quick health check used by the Settings screen. Returns an error message or null. */
 export async function testSupabaseConnection(): Promise<string | null> {
   const sb = getSupabase();
