@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #fff5f4;
+  --background-2: #ffeceb;
+  --surface: #ffffff;
+  --primary: #e76f6f;
+  --primary-strong: #d95b6f;
+  --primary-soft: #fde3e3;
+  --text: #222222;
+  --muted: #8a7f80;
+  --line: #f3dcdc;
+  --success: #4caf7d;
+}
+
+.dark {
+  --background: #1c1416;
+  --background-2: #241a1d;
+  --surface: #2a1f22;
+  --primary: #ef8585;
+  --primary-strong: #e76f6f;
+  --primary-soft: #3d2529;
+  --text: #f5eceb;
+  --muted: #a89a9b;
+  --line: #3d2d30;
+  --success: #6fca9c;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-2: var(--background-2);
+  --color-surface: var(--surface);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-soft: var(--primary-soft);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-success: var(--success);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --radius-card: 20px;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: linear-gradient(160deg, var(--background) 0%, var(--background-2) 100%);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  transition: background 300ms ease-in-out, color 300ms ease-in-out;
+}
+
+/* Soft card used everywhere */
+.card {
+  background: var(--surface);
+  border-radius: 20px;
+  box-shadow: 0 8px 30px rgba(231, 111, 111, 0.08);
+  transition: background 300ms ease-in-out, box-shadow 300ms ease-in-out;
+}
+
+/* Gentle floating heart on the login screen */
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.animate-float-soft {
+  animation: float-soft 3s ease-in-out infinite;
+}
+
+/* Heart-beat used on the welcome transition */
+@keyframes heart-beat {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.18); }
+  28% { transform: scale(1); }
+  42% { transform: scale(1.14); }
+  70% { transform: scale(1); }
+}
+.animate-heart-beat {
+  animation: heart-beat 1.2s ease-in-out infinite;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.12); }
+}
+.animate-glow-pulse {
+  animation: glow-pulse 1.6s ease-in-out infinite;
+}
+
+/* Leaflet fixes */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: var(--background-2);
+  font-family: var(--font-sans);
+}
+.ourspace-marker {
+  background: transparent;
+  border: none;
+}
+
+::selection {
+  background: var(--primary-soft);
+}
