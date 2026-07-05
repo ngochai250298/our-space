@@ -24,8 +24,8 @@ export function LetterCard({ letter, viewer, onRead, onDelete }: LetterCardProps
       ? `Gửi đến ${displayNameOf(letter.to)}`
       : displayNameOf(letter.from);
   const unreadForMe = letter.to === viewer && !letter.readAt;
-  // Only the sender can take their own letter back.
-  const canDelete = letter.from === viewer;
+  // Both sides can delete their own copy — sender (Đã gửi) or recipient (Hộp thư đến).
+  const canDelete = letter.from === viewer || letter.to === viewer;
 
   const toggle = () => {
     const next = !open;
@@ -35,34 +35,72 @@ export function LetterCard({ letter, viewer, onRead, onDelete }: LetterCardProps
 
   return (
     <motion.article layout className="card overflow-hidden">
-      <button
-        type="button"
-        onClick={toggle}
-        className="flex w-full items-center gap-3 p-4 text-left"
-        aria-expanded={open}
-      >
-        <Avatar role={letter.from === viewer ? letter.to : letter.from} size="sm" />
-        <span className="min-w-0 flex-1">
-          <span className="block text-xs font-semibold">{headerName}</span>
-          <span className="block truncate text-xs text-muted">{letter.title}</span>
-          <span className="block text-[10px] tabular-nums text-muted/80">
-            {formatDateTimeVi(letter.createdAt)}
+      <div className="flex items-center">
+        <button
+          type="button"
+          onClick={toggle}
+          className="flex min-w-0 flex-1 items-center gap-3 p-4 text-left"
+          aria-expanded={open}
+        >
+          <Avatar role={letter.from === viewer ? letter.to : letter.from} size="sm" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-semibold">{headerName}</span>
+            <span className="block truncate text-xs text-muted">{letter.title}</span>
+            <span className="block text-[10px] tabular-nums text-muted/80">
+              {formatDateTimeVi(letter.createdAt)}
+            </span>
           </span>
-        </span>
-        {unreadForMe ? (
-          <span className="grid size-5 place-items-center rounded-full bg-primary text-[10px] font-bold text-white">
-            1
-          </span>
-        ) : (
-          <motion.span
-            aria-hidden
-            animate={{ scale: open ? 1.1 : 1 }}
-            className="text-lg"
-          >
-            {open ? "💌" : "✉️"}
-          </motion.span>
+          {unreadForMe ? (
+            <span className="grid size-5 place-items-center rounded-full bg-primary text-[10px] font-bold text-white">
+              1
+            </span>
+          ) : (
+            <motion.span
+              aria-hidden
+              animate={{ scale: open ? 1.1 : 1 }}
+              className="text-lg"
+            >
+              {open ? "💌" : "✉️"}
+            </motion.span>
+          )}
+        </button>
+
+        {/* Sender can take their own letter back — visible right on the card. */}
+        {canDelete && (
+          <div className="flex items-center pr-3">
+            {confirming ? (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirming(false);
+                    onDelete();
+                  }}
+                  className="rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-white"
+                >
+                  Xóa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  className="rounded-full px-2 py-1 text-[11px] font-semibold text-muted"
+                >
+                  Hủy
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                aria-label="Xóa thư"
+                onClick={() => setConfirming(true)}
+                className="grid size-8 place-items-center rounded-full text-muted transition-colors hover:text-primary-strong"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </div>
         )}
-      </button>
+      </div>
 
       <AnimatePresence initial={false}>
         {open && (
@@ -78,41 +116,6 @@ export function LetterCard({ letter, viewer, onRead, onDelete }: LetterCardProps
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
                 {letter.body}
               </p>
-
-              {canDelete && (
-                <div className="mt-3 flex justify-end">
-                  {confirming ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-muted">Xóa lá thư này?</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setConfirming(false);
-                          onDelete();
-                        }}
-                        className="rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-white"
-                      >
-                        Xóa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirming(false)}
-                        className="rounded-full px-3 py-1 text-[11px] font-semibold text-muted"
-                      >
-                        Hủy
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirming(true)}
-                      className="flex items-center gap-1 text-[11px] font-medium text-muted transition-colors hover:text-primary-strong"
-                    >
-                      <Trash2 size={13} /> Xóa thư
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
           </motion.div>
         )}

@@ -28,8 +28,8 @@ export default function LettersPage() {
     if (!session) return [];
     const mine =
       tab === "inbox"
-        ? (l: Letter) => l.to === session.role
-        : (l: Letter) => l.from === session.role;
+        ? (l: Letter) => l.to === session.role && !l.hiddenByTo
+        : (l: Letter) => l.from === session.role && !l.hiddenByFrom;
     return items.filter(mine).sort((a, b) => b.createdAt - a.createdAt);
   }, [items, tab, session]);
 
@@ -43,6 +43,21 @@ export default function LettersPage() {
     setTitle("");
     setBody("");
     setComposing(true);
+  };
+
+  // "Xóa" một lá thư = ẩn bản của phía mình. Chỉ khi cả hai phía đều đã ẩn
+  // thì mới thật sự xóa row khỏi Supabase.
+  const hideForMe = (letter: Letter) => {
+    const iAmSender = letter.from === session.role;
+    const otherSideHidden = iAmSender ? letter.hiddenByTo : letter.hiddenByFrom;
+    if (otherSideHidden) {
+      void remove(letter.id);
+    } else {
+      void update(
+        letter.id,
+        iAmSender ? { hiddenByFrom: true } : { hiddenByTo: true }
+      );
+    }
   };
 
   const toggleRecipient = (role: Role) => {
@@ -127,7 +142,7 @@ export default function LettersPage() {
               if (letter.to === session.role && !letter.readAt)
                 void update(letter.id, { readAt: Date.now() });
             }}
-            onDelete={() => void remove(letter.id)}
+            onDelete={() => hideForMe(letter)}
           />
         ))}
       </div>

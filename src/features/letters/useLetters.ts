@@ -15,6 +15,8 @@ interface LetterRow {
   body: string;
   created_at: string;
   read_at: string | null;
+  hidden_by_from?: boolean;
+  hidden_by_to?: boolean;
 }
 
 const SPEC: CloudSpec<Letter> = {
@@ -33,6 +35,8 @@ const SPEC: CloudSpec<Letter> = {
       body: row.body,
       createdAt: new Date(row.created_at).getTime(),
       readAt: row.read_at ? new Date(row.read_at).getTime() : undefined,
+      hiddenByFrom: row.hidden_by_from ?? false,
+      hiddenByTo: row.hidden_by_to ?? false,
     };
   },
   toInsertRow: (letter) => ({
@@ -49,6 +53,12 @@ const SPEC: CloudSpec<Letter> = {
   toPatchRow: (patch) => ({
     ...(patch.readAt !== undefined
       ? { read_at: new Date(patch.readAt).toISOString() }
+      : {}),
+    ...(patch.hiddenByFrom !== undefined
+      ? { hidden_by_from: patch.hiddenByFrom }
+      : {}),
+    ...(patch.hiddenByTo !== undefined
+      ? { hidden_by_to: patch.hiddenByTo }
       : {}),
   }),
 };

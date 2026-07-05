@@ -34,6 +34,10 @@ export interface Letter {
   body: string;
   createdAt: number;
   readAt?: number;
+  /** Hidden from the sender's "Đã gửi" tab (they deleted their own copy). */
+  hiddenByFrom?: boolean;
+  /** Hidden from the recipient's "Hộp thư đến" (they deleted their own copy). */
+  hiddenByTo?: boolean;
 }
 
 export interface Photo {
