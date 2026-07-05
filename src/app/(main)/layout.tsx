@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useSession } from "@/hooks/useSession";
 import { useLocationSync } from "@/hooks/useLocationSync";
+import { ensureAccountsLoaded } from "@/lib/auth";
 import { BottomNav } from "@/components/BottomNav";
 import { PlayerProvider } from "@/features/playlist/PlayerProvider";
 
@@ -11,6 +12,11 @@ export default function MainLayout({ children }: { children: ReactNode }) {
   // Keep pushing our real position (every 10s) while the site is open,
   // so the partner's map stays truthful even when we're not on the map page.
   useLocationSync(session);
+
+  // Warm the shared account names/passwords so admin edits show up here too.
+  useEffect(() => {
+    void ensureAccountsLoaded();
+  }, []);
 
   // While the session is being read (or redirecting to login) render a calm blank.
   if (!session) {

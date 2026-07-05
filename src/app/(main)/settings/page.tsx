@@ -49,8 +49,8 @@ export default function SettingsPage() {
 
   if (!session) return null;
 
-  const submitPassword = () => {
-    if (!changePassword(session.role, oldPw, newPw)) {
+  const submitPassword = async () => {
+    if (!(await changePassword(session.role, oldPw, newPw))) {
       setPwMessage("Mật khẩu hiện tại chưa đúng.");
       return;
     }

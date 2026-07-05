@@ -35,8 +35,8 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginValues>({ resolver: zodResolver(loginSchema) });
 
-  const onSubmit = (values: LoginValues) => {
-    const result = login(values.username, values.password);
+  const onSubmit = async (values: LoginValues) => {
+    const result = await login(values.username, values.password);
     if (!result) {
       setLoginError("Mật khẩu chưa đúng.");
       return;
