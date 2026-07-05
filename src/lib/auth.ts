@@ -40,6 +40,7 @@ const ACCOUNTS_TABLE = "accounts";
 interface CloudAccount {
   displayName: string;
   password: string;
+  avatarUrl: string | null;
 }
 let cloudAccounts: Partial<Record<Role, CloudAccount>> = {};
 let accountsLoadPromise: Promise<void> | null = null;
@@ -57,8 +58,13 @@ export async function ensureAccountsLoaded(force = false): Promise<void> {
       role: Role;
       display_name: string;
       password: string;
+      avatar_url?: string | null;
     }>) {
-      next[row.role] = { displayName: row.display_name, password: row.password };
+      next[row.role] = {
+        displayName: row.display_name,
+        password: row.password,
+        avatarUrl: row.avatar_url ?? null,
+      };
     }
     cloudAccounts = next;
     if (typeof window !== "undefined")
@@ -67,24 +73,32 @@ export async function ensureAccountsLoaded(force = false): Promise<void> {
   return accountsLoadPromise;
 }
 
-/** Admin: change a display name and/or password for everyone. */
+/** Admin/user: change a display name, password and/or avatar for everyone. */
 export async function saveAccount(
   role: Role,
-  patch: { displayName?: string; password?: string }
+  patch: { displayName?: string; password?: string; avatarUrl?: string | null }
 ): Promise<boolean> {
   const sb = getSupabase();
   if (!sb) return false;
   const base = accountFor(role);
-  const row = {
+  const row: Record<string, unknown> = {
     role,
     display_name: patch.displayName ?? displayNameOf(role) ?? base.displayName,
     password: patch.password ?? currentPassword(base),
     updated_at: new Date().toISOString(),
   };
+  // Only touch avatar_url when actually changing it, so name/password saves
+  // still work even before migration8 adds the column.
+  if (patch.avatarUrl !== undefined) row.avatar_url = patch.avatarUrl;
   const { error } = await sb.from(ACCOUNTS_TABLE).upsert(row);
   if (error) return false;
   await ensureAccountsLoaded(true);
   return true;
+}
+
+/** Uploaded avatar URL for a person, or null to fall back to the emoji. */
+export function avatarOf(role: Role): string | null {
+  return cloudAccounts[role]?.avatarUrl ?? null;
 }
 
 export function accountFor(role: Role): Account {

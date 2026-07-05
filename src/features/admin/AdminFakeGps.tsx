@@ -9,7 +9,7 @@ import type {
 import type * as LeafletNS from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Role } from "@/types";
-import { allAccounts, displayNameOf, genderOf } from "@/lib/auth";
+import { allAccounts, avatarOf, displayNameOf, genderOf } from "@/lib/auth";
 import { getSupabase } from "@/lib/supabase";
 
 // Ho Chi Minh City — a sensible default when a person has no fix yet.
@@ -23,9 +23,13 @@ interface LocRow {
 
 function personIconHtml(role: Role): string {
   const emoji = genderOf(role) === "male" ? "👨🏻" : "👩🏻";
+  const url = avatarOf(role);
+  const inner = url
+    ? `<img src="${url}" style="width:32px;height:32px;border-radius:999px;object-fit:cover;border:2px solid #e76f6f;box-shadow:0 2px 6px rgba(0,0,0,.25);" />`
+    : `<span style="display:grid;place-items:center;width:32px;height:32px;font-size:16px;background:#fff;border:2px solid #e76f6f;border-radius:999px;box-shadow:0 2px 6px rgba(0,0,0,.25);">${emoji}</span>`;
   return `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
     <span style="background:#e76f6f;color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;white-space:nowrap;">${displayNameOf(role)}</span>
-    <span style="display:grid;place-items:center;width:32px;height:32px;font-size:16px;background:#fff;border:2px solid #e76f6f;border-radius:999px;box-shadow:0 2px 6px rgba(0,0,0,.25);">${emoji}</span>
+    ${inner}
   </div>`;
 }
 

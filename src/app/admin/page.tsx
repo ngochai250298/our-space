@@ -15,6 +15,7 @@ import {
 import { ADMIN_PASSWORD, ADMIN_USERNAME } from "@/config";
 import { Input, PrimaryButton } from "@/components/Field";
 import { DateField } from "@/components/DateField";
+import { AvatarUploader } from "@/components/AvatarUploader";
 import { useSettings } from "@/hooks/useSettings";
 import { displayNameOf } from "@/lib/auth";
 import { formatDateTimeVi, formatDateVi } from "@/lib/dates";
@@ -245,8 +246,9 @@ function AccountEditor({
 
   return (
     <div className="card space-y-3 p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold">
+      <div className="flex items-center gap-3">
+        <AvatarUploader role={account.role} size="md" />
+        <span className="flex-1 text-sm font-semibold">
           {displayNameOf(account.role)}
         </span>
         <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-medium text-primary-strong">

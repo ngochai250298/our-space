@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Modal } from "@/components/Modal";
-import { Avatar } from "@/components/Avatar";
+import { AvatarUploader } from "@/components/AvatarUploader";
 import { Input, PrimaryButton } from "@/components/Field";
 import { DateField } from "@/components/DateField";
 import { useSession } from "@/hooks/useSession";
@@ -139,7 +139,7 @@ export default function SettingsPage() {
 
       {/* Profile */}
       <section className="card mb-4 flex items-center gap-3.5 p-4">
-        <Avatar role={session.role} size="lg" />
+        <AvatarUploader role={session.role} size="lg" />
         <div>
           <p className="text-sm font-semibold">{session.displayName}</p>
           <p className="text-xs text-muted">
@@ -147,6 +147,7 @@ export default function SettingsPage() {
               ? "Thành viên gia đình 💗"
               : `Trưởng thành bên ${partnerName(session.role)} 💗`}
           </p>
+          <p className="mt-0.5 text-[11px] text-muted">Chạm ảnh để đổi 📷</p>
         </div>
       </section>
 

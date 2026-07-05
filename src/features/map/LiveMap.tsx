@@ -14,7 +14,7 @@ import {
   subscribeLocations,
 } from "@/lib/location";
 import { getSupabaseConfig } from "@/lib/supabase";
-import { displayNameOf, genderOf } from "@/lib/auth";
+import { avatarOf, displayNameOf, genderOf } from "@/lib/auth";
 import { distanceKm, formatKm } from "@/lib/geo";
 import { placeLabel } from "@/lib/geocode";
 
@@ -43,12 +43,17 @@ function markerHtml(role: Role, approx: boolean): string {
         padding:2px 8px;border-radius:999px;white-space:nowrap;">${name}</span>`;
   const border = approx ? "#b0a4a5" : "#e76f6f";
   const opacity = approx ? "0.75" : "1";
+  const url = avatarOf(role);
+  const inner = url
+    ? `<img src="${url}" style="width:44px;height:44px;border-radius:999px;object-fit:cover;
+        border:3px solid ${border};box-shadow:0 4px 12px rgba(0,0,0,.2);" />`
+    : `<span style="display:grid;place-items:center;width:44px;height:44px;font-size:22px;
+        background:#fff;border:3px solid ${border};border-radius:999px;
+        box-shadow:0 4px 12px rgba(0,0,0,.2);">${emojiOf(role)}</span>`;
   return `
     <div style="display:flex;flex-direction:column;align-items:center;gap:2px;opacity:${opacity};">
       ${pill}
-      <span style="display:grid;place-items:center;width:44px;height:44px;font-size:22px;
-        background:#fff;border:3px solid ${border};border-radius:999px;
-        box-shadow:0 4px 12px rgba(0,0,0,.2);">${emojiOf(role)}</span>
+      ${inner}
     </div>`;
 }
 
@@ -87,6 +92,7 @@ export function LiveMap({ session }: { session: Session }) {
     let disposed = false;
     let intervalId = 0;
     let unsubscribe: (() => void) | undefined;
+    let onAccounts: (() => void) | undefined;
 
     // Seed: the couple always appears (home cities as explicit "gần đúng"
     // fallbacks); everyone else appears once they have a stored/live fix.
@@ -235,12 +241,17 @@ export function LiveMap({ session }: { session: Session }) {
       unsubscribe = subscribeLocations((loc) => {
         if (!disposed && loc.role !== me) applyLocation(loc);
       });
+
+      // Refresh markers when someone changes their avatar/name.
+      onAccounts = () => redraw();
+      window.addEventListener("ourspace:accounts", onAccounts);
     })();
 
     return () => {
       disposed = true;
       window.clearInterval(intervalId);
       unsubscribe?.();
+      if (onAccounts) window.removeEventListener("ourspace:accounts", onAccounts);
       mapRef.current?.remove();
       mapRef.current = null;
       markersRef.current = {};
