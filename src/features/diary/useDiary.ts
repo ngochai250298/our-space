@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DiaryEntry, Session } from "@/types";
 import { useCollection } from "@/hooks/useCollection";
+import { canSee } from "@/lib/auth";
 import { loadItem, saveItem } from "@/lib/storage";
 import {
   addCloudDiary,
@@ -133,7 +134,13 @@ export function useDiary(session: Session | null): UseDiary {
     [cloudEntries, local, refresh]
   );
 
-  const entries = cloud ? [...local.items, ...cloudEntries] : local.items;
+  const all = cloud ? [...local.items, ...cloudEntries] : local.items;
+  // An entry belongs to its author's circle: family and friends don't read each
+  // other's, the couple reads everything. `session` is null on the admin screen,
+  // which is meant to see every entry.
+  const entries = session
+    ? all.filter((e) => canSee(session.role, e.author))
+    : all;
   const ready = cloud ? cloudReady && local.ready : local.ready;
 
   return { entries, ready, cloudError, addEntry, updateEntry, removeEntry };
