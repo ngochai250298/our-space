@@ -440,12 +440,14 @@ export function partnerName(role: Role): string {
 }
 
 /**
- * Who a person is allowed to see on the map.
+ * Whether `viewer` is allowed to see `target` and the things target shares —
+ * their position on the map, the photos they upload, and their name in a
+ * letter's recipient picker.
  *
  * The couple sees everyone. Family and friends are separate circles that can't
  * see each other — each sees their own circle plus Hải and Bình.
  */
-export function canSeeLocation(viewer: Role, target: Role): boolean {
+export function canSee(viewer: Role, target: Role): boolean {
   if (viewer === target) return true;
   const viewerKind = kindOf(viewer);
   if (viewerKind === "couple") return true;

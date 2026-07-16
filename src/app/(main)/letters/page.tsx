@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Input, Textarea, PrimaryButton } from "@/components/Field";
 import { useSession } from "@/hooks/useSession";
 import { useLetters } from "@/features/letters/useLetters";
-import { allAccounts, partnerOf } from "@/lib/auth";
+import { allAccounts, canSee, partnerOf } from "@/lib/auth";
 import type { Letter, Role } from "@/types";
 import { LetterCard } from "@/features/letters/LetterCard";
 
@@ -35,7 +35,11 @@ export default function LettersPage() {
 
   if (!session) return null;
 
-  const others = allAccounts().filter((a) => a.role !== session.role);
+  // You can only write to your own circle (plus Hải & Bình, who are in
+  // everyone's). Family and friends can't reach each other.
+  const others = allAccounts().filter(
+    (a) => a.role !== session.role && canSee(session.role, a.role)
+  );
 
   const openCompose = () => {
     const partner = partnerOf(session.role);

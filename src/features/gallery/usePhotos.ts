@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Photo, Role, Session } from "@/types";
 import { useCollection } from "@/hooks/useCollection";
+import { canSee } from "@/lib/auth";
 import { loadItem, saveItem } from "@/lib/storage";
 import {
   cloudGalleryEnabled,
@@ -109,7 +110,13 @@ export function usePhotos(session: Session | null): UsePhotos {
     const raw = p as StoredPhoto;
     return { ...p, url: raw.url ?? raw.dataUrl ?? "" };
   });
-  const photos = cloud ? [...localPhotos, ...cloudPhotos] : localPhotos;
+  const all = cloud ? [...localPhotos, ...cloudPhotos] : localPhotos;
+  // A photo belongs to the uploader's circle: family and friends don't see each
+  // other's, the couple sees everything. `session` is null on the admin screen,
+  // which is meant to see the whole gallery.
+  const photos = session
+    ? all.filter((p) => canSee(session.role, p.uploadedBy))
+    : all;
   const ready = cloud ? cloudReady && local.ready : local.ready;
 
   return { photos, ready, cloudError, addPhoto, removePhoto };

@@ -14,7 +14,7 @@ import {
   subscribeLocations,
 } from "@/lib/location";
 import { getSupabaseConfig } from "@/lib/supabase";
-import { avatarOf, canSeeLocation, displayNameOf, genderOf, isAdmin } from "@/lib/auth";
+import { avatarOf, canSee, displayNameOf, genderOf, isAdmin } from "@/lib/auth";
 import { distanceKm, formatKm } from "@/lib/geo";
 import { placeLabel } from "@/lib/geocode";
 import { useFriendLinks } from "@/hooks/useFriendLinks";
@@ -118,7 +118,7 @@ export function LiveMap({ session }: { session: Session }) {
     const stored = loadStoredLocations();
     (Object.keys(stored) as Role[]).forEach((role) => {
       const fix = stored[role];
-      if (!fix || !canSeeLocation(me, role)) return;
+      if (!fix || !canSee(me, role)) return;
       const fresh = Date.now() - fix.updatedAt < FRESH_MS;
       locationsRef.current[role] = {
         ...fix,
@@ -187,7 +187,7 @@ export function LiveMap({ session }: { session: Session }) {
         (Object.keys(locs) as Role[]).forEach((role) => {
           const loc = locs[role];
           if (!loc) return;
-          if (!canSeeLocation(me, role)) {
+          if (!canSee(me, role)) {
             hide(role);
             return;
           }
@@ -256,7 +256,7 @@ export function LiveMap({ session }: { session: Session }) {
       const applyLocation = (loc: LiveLocation) => {
         // Never store, draw or cache a position I'm not allowed to see — the
         // couple's circle and the friends' circle stay apart on-device too.
-        if (!canSeeLocation(me, loc.role)) return;
+        if (!canSee(me, loc.role)) return;
         const isNew = !locationsRef.current[loc.role];
         locationsRef.current[loc.role] = loc;
         storeLocation(loc);
