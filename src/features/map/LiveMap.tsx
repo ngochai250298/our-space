@@ -14,7 +14,7 @@ import {
   subscribeLocations,
 } from "@/lib/location";
 import { getSupabaseConfig } from "@/lib/supabase";
-import { avatarOf, displayNameOf, genderOf } from "@/lib/auth";
+import { avatarOf, displayNameOf, genderOf, isAdmin } from "@/lib/auth";
 import { distanceKm, formatKm } from "@/lib/geo";
 import { placeLabel } from "@/lib/geocode";
 
@@ -57,7 +57,14 @@ function markerHtml(role: Role, approx: boolean): string {
     </div>`;
 }
 
-function popupHtml(loc: LiveLocation, place: string): string {
+function mapsLink(loc: LiveLocation): string {
+  const query = `${loc.lat},${loc.lng}`;
+  return `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}"
+      target="_blank" rel="noopener noreferrer"
+      style="color:#e76f6f;font-weight:600;text-decoration:underline;">🗺️ Click vào đây để xem</a>`;
+}
+
+function popupHtml(loc: LiveLocation, place: string, showExact: boolean): string {
   const lines = [
     `<b>${emojiOf(loc.role)} ${displayNameOf(loc.role)}</b>`,
     `📍 ${place}`,
@@ -65,6 +72,9 @@ function popupHtml(loc: LiveLocation, place: string): string {
       ? `⚠️ Vị trí gần đúng — chưa có định vị thật`
       : `🕐 Cập nhật ${timeAgo(loc.updatedAt)} · 🎯 ~${Math.round(loc.accuracy)} m`,
   ];
+  // The exact-coordinates link is meaningless on an "approx" fix — that is
+  // just the person's home city, not a GPS reading.
+  if (showExact && !loc.approx) lines.push(mapsLink(loc));
   return `<div style="font-size:12px;line-height:1.6;min-width:150px;">${lines.join("<br/>")}</div>`;
 }
 
@@ -147,23 +157,28 @@ export function LiveMap({ session }: { session: Session }) {
         return labelsRef.current[role] ?? "Đang xác định vị trí…";
       };
 
+      // Only Hải gets the "open in Google Maps" link, and only on other
+      // people's markers — his own position is already his own device.
+      const showExactFor = (role: Role) => isAdmin(me) && role !== me;
+
       const redraw = () => {
         const locs = locationsRef.current;
         (Object.keys(locs) as Role[]).forEach((role) => {
           const loc = locs[role];
           if (!loc) return;
           const place = placeFor(role, loc);
+          const html = popupHtml(loc, place, showExactFor(role));
           const existing = markersRef.current[role];
           if (existing) {
             existing.setLatLng([loc.lat, loc.lng]);
             existing.setIcon(icon(role, loc.approx === true));
-            existing.setPopupContent(popupHtml(loc, place));
+            existing.setPopupContent(html);
           } else {
             markersRef.current[role] = L.marker([loc.lat, loc.lng], {
               icon: icon(role, loc.approx === true),
             })
               .addTo(map)
-              .bindPopup(popupHtml(loc, place));
+              .bindPopup(html);
           }
         });
 
