@@ -55,6 +55,12 @@ interface CloudAccount {
 }
 let cloudAccounts: Partial<Record<Role, CloudAccount>> = {};
 let accountsLoadPromise: Promise<void> | null = null;
+/**
+ * True once we've actually read the accounts table. Until then we can't tell
+ * "this account was deleted" from "we haven't looked yet", and we must not
+ * sign anyone out on a guess.
+ */
+let cloudLoaded = false;
 
 /** Fetch accounts from Supabase once (or force a refresh). */
 export async function ensureAccountsLoaded(force = false): Promise<void> {
@@ -88,6 +94,7 @@ export async function ensureAccountsLoaded(force = false): Promise<void> {
       };
     }
     cloudAccounts = next;
+    cloudLoaded = true;
     if (typeof window !== "undefined")
       window.dispatchEvent(new CustomEvent("ourspace:accounts"));
   })();
@@ -95,34 +102,30 @@ export async function ensureAccountsLoaded(force = false): Promise<void> {
 }
 
 /**
- * Every account we know about: the code list with cloud values layered on top,
- * plus any account that only exists on the cloud (created from /admin).
+ * Every account that exists.
+ *
+ * Once the accounts table has been read it is the ONLY source of truth: an
+ * account the admin deleted must not come back to life from the code list
+ * below (it would still accept its old password). The code list is used only
+ * when we haven't reached the cloud — offline, or before the first read.
  */
 function roster(): Account[] {
-  const merged: Account[] = ACCOUNTS.map((base) => {
-    const cloud = cloudAccounts[base.role];
-    if (!cloud) return base;
+  const roles = Object.keys(cloudAccounts);
+  if (!cloudLoaded || roles.length === 0) return ACCOUNTS;
+  return roles.map((role) => {
+    const cloud = cloudAccounts[role]!;
+    // The code entry still supplies username/kind/gender for rows written
+    // before migration9 added those columns.
+    const base = ACCOUNTS.find((a) => a.role === role);
     return {
-      ...base,
-      username: cloud.username ?? base.username,
+      role,
+      username: cloud.username ?? base?.username ?? role,
       displayName: cloud.displayName,
       password: cloud.password,
-      kind: cloud.kind ?? base.kind,
-      gender: cloud.gender ?? base.gender,
+      kind: cloud.kind ?? base?.kind ?? "family",
+      gender: cloud.gender ?? base?.gender ?? "female",
     };
   });
-  for (const [role, cloud] of Object.entries(cloudAccounts)) {
-    if (!cloud || merged.some((a) => a.role === role)) continue;
-    merged.push({
-      role,
-      username: cloud.username ?? role,
-      displayName: cloud.displayName,
-      password: cloud.password,
-      kind: cloud.kind ?? "family",
-      gender: cloud.gender ?? "female",
-    });
-  }
-  return merged;
 }
 
 /** Uploaded avatar URL for a person, or null to fall back to the emoji. */
@@ -227,6 +230,21 @@ export function logout(): void {
 export function isSessionRevoked(session: Session): boolean {
   const revokedAt = cloudAccounts[session.role]?.revokedAt;
   return revokedAt != null && session.loggedInAt < revokedAt;
+}
+
+/**
+ * True when this account no longer exists — the admin deleted it while the
+ * person was signed in. Answers "false" until the cloud list has loaded, so a
+ * device that can't reach Supabase is never signed out on a guess.
+ */
+export function isAccountGone(session: Session): boolean {
+  if (!cloudLoaded || Object.keys(cloudAccounts).length === 0) return false;
+  return !cloudAccounts[session.role];
+}
+
+/** Hải and Bình are wired into the map, the shared dates and the admin check. */
+export function canDeleteAccount(role: Role): boolean {
+  return role !== "anh" && role !== "em";
 }
 
 /** Admin: kick a person off every device they're signed in on. */
@@ -337,6 +355,70 @@ export async function createAccount(
       error: `Không tạo được — đã chạy migration9_friends.sql chưa? (${error.message})`,
     };
   await ensureAccountsLoaded(true);
+  return { ok: true };
+}
+
+const PHOTO_BUCKET = "photos";
+
+/**
+ * Admin: delete an account and everything it left behind — diary entries,
+ * gallery photos (files included), letters sent AND received, Open When
+ * envelopes, last position, and any friend link.
+ *
+ * There is no undo. Content is removed rather than orphaned, so nothing is
+ * left showing a raw role id where a name used to be.
+ */
+export async function deleteAccount(
+  role: Role
+): Promise<{ ok: boolean; error?: string }> {
+  if (!canDeleteAccount(role))
+    return { ok: false, error: "Không thể xoá tài khoản của Hải hoặc Bình." };
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: "Chưa cấu hình Supabase." };
+
+  // 1. Storage files: gallery uploads (paths recorded per row) + avatars
+  //    (named "avatars/<role>-<timestamp>.jpg").
+  const { data: photoRows } = await sb
+    .from("gallery")
+    .select("storage_path")
+    .eq("uploaded_by", role);
+  const paths = ((photoRows ?? []) as Array<{ storage_path: string | null }>)
+    .map((p) => p.storage_path)
+    .filter((p): p is string => !!p);
+
+  const { data: avatarFiles } = await sb.storage
+    .from(PHOTO_BUCKET)
+    .list("avatars", { limit: 1000 });
+  const avatarPaths = (avatarFiles ?? [])
+    .filter((f) => f.name.startsWith(`${role}-`))
+    .map((f) => `avatars/${f.name}`);
+
+  const allFiles = [...paths, ...avatarPaths];
+  if (allFiles.length > 0) await sb.storage.from(PHOTO_BUCKET).remove(allFiles);
+
+  // 2. Rows that reference this person.
+  await sb.from("gallery").delete().eq("uploaded_by", role);
+  await sb.from("diary").delete().eq("author", role);
+  await sb.from("letters").delete().or(`from_role.eq.${role},to_role.eq.${role}`);
+  await sb.from("open_when").delete().eq("from_role", role);
+  await sb.from("locations").delete().eq("role", role);
+  await sb.from("friend_links").delete().or(`role_a.eq.${role},role_b.eq.${role}`);
+
+  // 3. The account itself, last — if this fails the person still exists.
+  const { error } = await sb.from("accounts").delete().eq("role", role);
+  if (error)
+    return {
+      ok: false,
+      error: `Không xoá được — đã chạy migration10_delete_account.sql chưa? (${error.message})`,
+    };
+
+  await ensureAccountsLoaded(true);
+  // The row is gone; if it somehow survived, say so rather than claim success.
+  if (cloudAccounts[role])
+    return {
+      ok: false,
+      error: "Xoá không thành công — tài khoản vẫn còn (thiếu policy delete?).",
+    };
   return { ok: true };
 }
 

@@ -24,7 +24,9 @@ import { useSettings } from "@/hooks/useSettings";
 import { useFriendLinks } from "@/hooks/useFriendLinks";
 import {
   allAccounts,
+  canDeleteAccount,
   createAccount,
+  deleteAccount,
   displayNameOf,
   ensureAccountsLoaded,
   revokeSessions,
@@ -373,7 +375,12 @@ function AccountsSection() {
     <section className="space-y-3">
       <NewAccountForm onCreated={() => void refresh()} />
       {rows.map((acc) => (
-        <AccountEditor key={acc.role} account={acc} onSave={save} />
+        <AccountEditor
+          key={acc.role}
+          account={acc}
+          onSave={save}
+          onDeleted={() => void refresh()}
+        />
       ))}
       <p className="px-1 text-[11px] leading-relaxed text-muted">
         Tên hiển thị & mật khẩu lưu trên Supabase → đổi ở đây áp dụng cho mọi
@@ -528,12 +535,14 @@ function NewAccountForm({ onCreated }: { onCreated: () => void }) {
 function AccountEditor({
   account,
   onSave,
+  onDeleted,
 }: {
   account: AdminAccount;
   onSave: (
     role: AdminAccount["role"],
     patch: { displayName?: string; password?: string }
   ) => Promise<boolean>;
+  onDeleted: () => void;
 }) {
   const [displayName, setDisplayName] = useState(account.displayName);
   const [password, setPassword] = useState(account.password);
@@ -588,7 +597,79 @@ function AccountEditor({
               ? "Lỗi — thử lại"
               : "Lưu thay đổi"}
       </button>
+      {canDeleteAccount(account.role) && (
+        <DeleteAccountButton account={account} onDeleted={onDeleted} />
+      )}
     </div>
+  );
+}
+
+/**
+ * Deleting is irreversible and takes the person's content with it, so it asks
+ * twice: once inline (guards against a mis-tap) and once in a dialog spelling
+ * out what disappears.
+ */
+function DeleteAccountButton({
+  account,
+  onDeleted,
+}: {
+  account: AdminAccount;
+  onDeleted: () => void;
+}) {
+  const [arming, setArming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const name = displayNameOf(account.role);
+
+  useEffect(() => {
+    if (!arming) return;
+    const id = window.setTimeout(() => setArming(false), 5000);
+    return () => window.clearTimeout(id);
+  }, [arming]);
+
+  const submit = async () => {
+    const ok = window.confirm(
+      `Xoá sạch tài khoản ${name}?\n\n` +
+        `Sẽ mất vĩnh viễn: nhật ký, ảnh đã đăng, thư đã gửi VÀ đã nhận, ` +
+        `Open When, vị trí và dây nối của ${name}.\n\nKhông hoàn tác được.`
+    );
+    if (!ok) {
+      setArming(false);
+      return;
+    }
+    setBusy(true);
+    setError("");
+    const res = await deleteAccount(account.role);
+    setBusy(false);
+    if (res.ok) {
+      onDeleted();
+    } else {
+      setArming(false);
+      setError(res.error ?? "Không xoá được.");
+    }
+  };
+
+  return (
+    <>
+      {error && <p className="text-xs text-primary-strong">{error}</p>}
+      <button
+        type="button"
+        onClick={() => (arming ? void submit() : setArming(true))}
+        disabled={busy}
+        className={`flex w-full items-center justify-center gap-1.5 rounded-2xl py-2 text-[11px] font-semibold transition-all active:scale-[0.98] disabled:opacity-40 ${
+          arming
+            ? "bg-primary-strong text-white"
+            : "border border-line text-muted hover:text-primary-strong"
+        }`}
+      >
+        <Trash2 size={13} />
+        {busy
+          ? "Đang xoá…"
+          : arming
+            ? `Chắc chắn xoá ${name}? Bấm lần nữa`
+            : "Xoá tài khoản"}
+      </button>
+    </>
   );
 }
 

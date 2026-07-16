@@ -6,6 +6,7 @@ import type { Session } from "@/types";
 import {
   ensureAccountsLoaded,
   getSession,
+  isAccountGone,
   isSessionRevoked,
   logout,
 } from "@/lib/auth";
@@ -15,10 +16,11 @@ const REVOKE_CHECK_MS = 60_000;
 
 /**
  * Client-side auth guard: redirects to the login screen when not signed in, and
- * signs the person out if the admin revoked their session from /admin.
+ * signs the person out if the admin revoked their session or deleted their
+ * account from /admin.
  *
- * The revoke check needs the cloud, so it only bites while the device is
- * online — a phone in airplane mode keeps its session until it reconnects.
+ * Both checks need the cloud, so they only bite while the device is online — a
+ * phone in airplane mode keeps its session until it reconnects.
  */
 export function useSession(): Session | null {
   const router = useRouter();
@@ -35,7 +37,8 @@ export function useSession(): Session | null {
       }
       await ensureAccountsLoaded(force);
       if (disposed) return;
-      if (isSessionRevoked(current)) {
+      // Cut off from /admin, or the account was deleted outright.
+      if (isSessionRevoked(current) || isAccountGone(current)) {
         logout();
         router.replace("/");
         return;
