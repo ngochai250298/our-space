@@ -14,9 +14,11 @@ import {
   subscribeLocations,
 } from "@/lib/location";
 import { getSupabaseConfig } from "@/lib/supabase";
-import { avatarOf, displayNameOf, genderOf, isAdmin } from "@/lib/auth";
+import { avatarOf, canSeeLocation, displayNameOf, genderOf, isAdmin } from "@/lib/auth";
 import { distanceKm, formatKm } from "@/lib/geo";
 import { placeLabel } from "@/lib/geocode";
+import { useFriendLinks } from "@/hooks/useFriendLinks";
+import { linkFor, partnerInLink } from "@/lib/friends";
 
 const UPDATE_INTERVAL_MS = 10_000;
 const COUPLE: Role[] = ["anh", "em"];
@@ -80,6 +82,7 @@ function popupHtml(loc: LiveLocation, place: string, showExact: boolean): string
 
 export function LiveMap({ session }: { session: Session }) {
   const { settings, ready } = useSettings();
+  const { links, ready: linksReady } = useFriendLinks();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Partial<Record<Role, Marker>>>({});
@@ -91,12 +94,17 @@ export function LiveMap({ session }: { session: Session }) {
   const [targetInfo, setTargetInfo] = useState<{ approx: boolean; updatedAt: number } | null>(null);
   const [geoError, setGeoError] = useState("");
   const synced = getSupabaseConfig() !== null;
-  // Everyone's dashed line points to Bình — except Bình herself, whose
-  // line points to Hải.
-  const target: Role = session.role === "em" ? "anh" : "em";
+  // The dashed line points to Bình — except Bình herself, whose line points to
+  // Hải, and friends the admin wired to someone, whose line points at them.
+  const myLink = linkFor(links, session.role);
+  const target: Role = myLink
+    ? partnerInLink(myLink, session.role)
+    : session.role === "em"
+      ? "anh"
+      : "em";
 
   useEffect(() => {
-    if (!ready || !containerRef.current || mapRef.current) return;
+    if (!ready || !linksReady || !containerRef.current || mapRef.current) return;
 
     const me = session.role;
     let disposed = false;
@@ -106,10 +114,11 @@ export function LiveMap({ session }: { session: Session }) {
 
     // Seed: the couple always appears (home cities as explicit "gần đúng"
     // fallbacks); everyone else appears once they have a stored/live fix.
+    // Anyone outside my circle is dropped here and never reaches the map.
     const stored = loadStoredLocations();
     (Object.keys(stored) as Role[]).forEach((role) => {
       const fix = stored[role];
-      if (!fix) return;
+      if (!fix || !canSeeLocation(me, role)) return;
       const fresh = Date.now() - fix.updatedAt < FRESH_MS;
       locationsRef.current[role] = {
         ...fix,
@@ -161,11 +170,27 @@ export function LiveMap({ session }: { session: Session }) {
       // people's markers — his own position is already his own device.
       const showExactFor = (role: Role) => isAdmin(me) && role !== me;
 
+      // Drop a marker for someone outside my circle. Needed as well as the
+      // filters below because the account list (and so everyone's group) may
+      // land after the first markers are drawn.
+      const hide = (role: Role) => {
+        const marker = markersRef.current[role];
+        if (marker) {
+          marker.remove();
+          delete markersRef.current[role];
+        }
+        delete locationsRef.current[role];
+      };
+
       const redraw = () => {
         const locs = locationsRef.current;
         (Object.keys(locs) as Role[]).forEach((role) => {
           const loc = locs[role];
           if (!loc) return;
+          if (!canSeeLocation(me, role)) {
+            hide(role);
+            return;
+          }
           const place = placeFor(role, loc);
           const html = popupHtml(loc, place, showExactFor(role));
           const existing = markersRef.current[role];
@@ -207,9 +232,9 @@ export function LiveMap({ session }: { session: Session }) {
       };
 
       const fitAll = () => {
-        const points = Object.values(locationsRef.current).map(
-          (loc) => [loc.lat, loc.lng] as [number, number]
-        );
+        const points = Object.values(locationsRef.current)
+          .filter((loc) => loc !== undefined)
+          .map((loc) => [loc.lat, loc.lng] as [number, number]);
         if (points.length >= 2) map.fitBounds(points, { padding: [60, 60] });
         else if (points.length === 1) map.setView(points[0], 12);
       };
@@ -229,6 +254,9 @@ export function LiveMap({ session }: { session: Session }) {
       (Object.keys(locationsRef.current) as Role[]).forEach(refreshLabel);
 
       const applyLocation = (loc: LiveLocation) => {
+        // Never store, draw or cache a position I'm not allowed to see — the
+        // couple's circle and the friends' circle stay apart on-device too.
+        if (!canSeeLocation(me, loc.role)) return;
         const isNew = !locationsRef.current[loc.role];
         locationsRef.current[loc.role] = loc;
         storeLocation(loc);
@@ -273,8 +301,10 @@ export function LiveMap({ session }: { session: Session }) {
       lineRef.current = null;
     };
     // The map is created once per mount; settings are read at creation time.
+    // `target` is in the deps so the dashed line re-anchors once the admin's
+    // friend links load (or change).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, session.role]);
+  }, [ready, linksReady, session.role, target]);
 
   return (
     <div className="relative -mx-4 h-[calc(100dvh-11.5rem)] overflow-hidden">

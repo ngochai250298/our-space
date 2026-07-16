@@ -88,7 +88,8 @@ export default function SettingsPage() {
     setSyncBusy(false);
   };
 
-  const isFamily = session.kind === "family";
+  // Only the couple owns the shared dates; family and friends just read them.
+  const isCouple = session.kind === "couple";
 
   const rows: Array<{
     icon: LucideIcon;
@@ -116,8 +117,8 @@ export default function SettingsPage() {
         setModal("sync");
       },
     },
-    // Anniversary & next meeting are the couple's — hidden from family.
-    ...(!isFamily
+    // Anniversary & next meeting are the couple's — hidden from everyone else.
+    ...(isCouple
       ? [
           {
             icon: CalendarHeart,
@@ -143,9 +144,11 @@ export default function SettingsPage() {
         <div>
           <p className="text-sm font-semibold">{session.displayName}</p>
           <p className="text-xs text-muted">
-            {isFamily
-              ? "Thành viên gia đình 💗"
-              : `Trưởng thành bên ${partnerName(session.role)} 💗`}
+            {isCouple
+              ? `Trưởng thành bên ${partnerName(session.role)} 💗`
+              : session.kind === "friend"
+                ? "Bạn bè của Hải & Bình 💗"
+                : "Thành viên gia đình 💗"}
           </p>
           <p className="mt-0.5 text-[11px] text-muted">Chạm ảnh để đổi 📷</p>
         </div>

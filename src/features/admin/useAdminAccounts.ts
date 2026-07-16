@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AccountKind, Role } from "@/types";
 import { getSupabase } from "@/lib/supabase";
-import { allAccounts, saveAccount } from "@/lib/auth";
+import { allAccounts, ensureAccountsLoaded, saveAccount } from "@/lib/auth";
 
 export interface AdminAccount {
   role: Role;
@@ -39,10 +39,12 @@ export function useAdminAccounts() {
       setReady(true);
       return;
     }
+    // Refresh the shared account cache first: allAccounts() reads from it, and
+    // accounts created from here exist only on the cloud, not in the code list.
+    await ensureAccountsLoaded(true);
     const byRole = new Map(
       (data as AccountRow[]).map((r) => [r.role, r])
     );
-    // Keep the code list's order + kind; overlay cloud values on top.
     setRows(
       allAccounts().map((a) => {
         const r = byRole.get(a.role);

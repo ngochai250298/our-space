@@ -27,6 +27,9 @@ import {
 import { TIMEZONES } from "@/lib/constants";
 import { formatKm } from "@/lib/geo";
 import { useCoupleDistance } from "@/hooks/useCoupleDistance";
+import { useFriendLinks } from "@/hooks/useFriendLinks";
+import { linkFor, partnerInLink } from "@/lib/friends";
+import { displayNameOf, genderOf } from "@/lib/auth";
 
 const MENU = [
   {
@@ -87,22 +90,34 @@ export default function HomePage() {
   const now = useNow();
   const { items: letters } = useLetters(session);
   const km = useCoupleDistance();
+  const { links } = useFriendLinks();
 
   if (!session) return null;
 
-  // Family accounts don't see the couple-private sections.
-  const isFamily = session.kind === "family";
-  const menu = isFamily
-    ? MENU.filter((m) => !["/open-when", "/bucket-list"].includes(m.href))
-    : MENU;
+  // Family and friends don't see the couple-private sections.
+  const isCouple = session.kind === "couple";
+  const isFriend = session.kind === "friend";
+  const menu = isCouple
+    ? MENU
+    : MENU.filter((m) => !["/open-when", "/bucket-list"].includes(m.href));
+
+  // The "together" counter: the couple counts from the shared anniversary; two
+  // friends the admin wired together count from their own. Everyone else has
+  // no pair, so no counter.
+  const myLink = linkFor(links, session.role);
+  const pairAnniversary = isCouple
+    ? settings.anniversary
+    : (myLink?.anniversary ?? null);
+  const pairPartner = myLink ? partnerInLink(myLink, session.role) : null;
 
   const unread = letters.filter(
     (l) => l.to === session.role && !l.readAt
   ).length;
-  const together = daysTogether(settings.anniversary);
+  const together = pairAnniversary ? daysTogether(pairAnniversary) : 0;
   const untilMeeting = daysUntil(settings.nextMeeting);
   // Countdown reached zero → it's reunion day (or later).
   const reunionArrived = untilMeeting <= 0;
+  const emoji = (role: string) => (genderOf(role) === "male" ? "👨🏻" : "👩🏻");
 
   return (
     <motion.div
@@ -126,31 +141,33 @@ export default function HomePage() {
         </span>
       </header>
 
-      {/* Love counter — couple only */}
-      {!isFamily && (
+      {/* Love counter — the couple, and any two friends wired together */}
+      {pairAnniversary && (
       <section className="card relative overflow-hidden bg-gradient-to-br from-primary-soft/70 to-surface p-5">
         <p className="flex items-center gap-1.5 text-xs text-primary-strong">
-          💗 Chúng ta đã ở bên nhau
+          💗 {pairPartner ? `${session.displayName} & ${displayNameOf(pairPartner)} đã ở bên nhau` : "Chúng ta đã ở bên nhau"}
         </p>
         <p className="mt-1 text-3xl font-bold tracking-tight">
           {together}{" "}
           <span className="text-lg font-semibold text-muted">ngày</span>
         </p>
         <p className="mt-1 inline-block rounded-full bg-primary-soft px-2.5 py-0.5 text-[11px] text-primary-strong">
-          Từ {formatDateVi(settings.anniversary)} ❤️
+          Từ {formatDateVi(pairAnniversary)} ❤️
         </p>
         <span
           className="absolute right-1 bottom-2 flex items-end opacity-95 text-4xl"
           aria-hidden
         >
-          👨🏻
+          {pairPartner ? emoji(session.role) : "👨🏻"}
           <span className="-mx-1 -translate-y-5 text-2xl">❤️</span>
-          👩🏻
+          {pairPartner ? emoji(pairPartner) : "👩🏻"}
         </span>
       </section>
       )}
 
-      {/* Countdown — everyone looks forward to the reunion */}
+      {/* Countdown to the couple's reunion — the house looks forward to it, but
+          the friends' circle has no meeting date, so they don't see it. */}
+      {!isFriend && (
       <section className="card p-5">
         <div className="flex items-center justify-between">
           <div>
@@ -185,6 +202,7 @@ export default function HomePage() {
           </p>
         )}
       </section>
+      )}
 
       {/* Distance & clocks */}
       <section className="card grid grid-cols-3 divide-x divide-line p-4 text-center">

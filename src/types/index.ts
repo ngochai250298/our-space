@@ -2,10 +2,25 @@
 export type CoupleRole = "anh" | "em";
 /** Family members — restricted view (no couple-private sections). */
 export type FamilyRole = "thuong" | "thuan" | "nhinhi" | "thinh";
-export type Role = CoupleRole | FamilyRole;
+/**
+ * A person's id. Accounts live in Supabase and the admin can create new ones,
+ * so this can't be a fixed union — it's whatever `accounts.role` holds.
+ * Use `kindOf()` to branch on the group instead of comparing role strings.
+ */
+export type Role = string;
 
 export type Gender = "male" | "female";
-export type AccountKind = "couple" | "family";
+/** "friend" works like "family", but the two groups can't see each other. */
+export type AccountKind = "couple" | "family" | "friend";
+
+/** A pair of friends the admin wired together ("nối dây"). */
+export interface FriendLink {
+  id: string;
+  roleA: Role;
+  roleB: Role;
+  /** ISO date they started dating — friends have no "next meeting" date. */
+  anniversary: string | null;
+}
 
 export interface Session {
   role: Role;
