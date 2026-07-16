@@ -1,15 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Role } from "@/types";
+import type { AccountKind, Role } from "@/types";
 import { getSupabase, liveTopic } from "@/lib/supabase";
+import { allAccounts, ensureAccountsLoaded } from "@/lib/auth";
 
 export interface PresenceRow {
   role: Role;
-  lat: number;
-  lng: number;
-  accuracy: number;
-  updatedAt: number;
+  kind: AccountKind;
+  /** Null until this person has shared a position at least once. */
+  position: { lat: number; lng: number; accuracy: number; updatedAt: number } | null;
 }
 
 interface LocationRow {
@@ -20,7 +20,13 @@ interface LocationRow {
   updated_at: string;
 }
 
-/** Last known position + last-seen time for everyone, refreshed on demand. */
+/**
+ * Everyone in the house with their last known position, refreshed on demand.
+ *
+ * Driven by the account list rather than the locations table: someone who has
+ * never shared a position still needs a row here, or the admin couldn't revoke
+ * their session.
+ */
 export function useAdminStatus() {
   const [rows, setRows] = useState<PresenceRow[]>([]);
   const [ready, setReady] = useState(false);
@@ -33,19 +39,29 @@ export function useAdminStatus() {
       setReady(true);
       return;
     }
+    await ensureAccountsLoaded(true);
     const { data, error: err } = await sb.from("locations").select("*");
     if (err || !data) {
       setError("Chưa đọc được bảng locations.");
       setReady(true);
       return;
     }
+    const byRole = new Map(
+      (data as LocationRow[]).map((r) => [
+        r.role,
+        {
+          lat: r.lat,
+          lng: r.lng,
+          accuracy: r.accuracy,
+          updatedAt: new Date(r.updated_at).getTime(),
+        },
+      ])
+    );
     setRows(
-      (data as LocationRow[]).map((r) => ({
-        role: r.role,
-        lat: r.lat,
-        lng: r.lng,
-        accuracy: r.accuracy,
-        updatedAt: new Date(r.updated_at).getTime(),
+      allAccounts().map((a) => ({
+        role: a.role,
+        kind: a.kind,
+        position: byRole.get(a.role) ?? null,
       }))
     );
     setError("");

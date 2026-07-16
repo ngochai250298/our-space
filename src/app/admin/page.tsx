@@ -895,7 +895,7 @@ function StatusSection() {
       </button>
       {rows.length === 0 && <Empty />}
       {rows.map((r) => {
-        const online = now - r.updatedAt < ONLINE_MS;
+        const online = r.position ? now - r.position.updatedAt < ONLINE_MS : false;
         return (
           <div key={r.role} className="card p-4">
             <div className="flex items-center gap-3">
@@ -905,14 +905,23 @@ function StatusSection() {
                 }`}
               />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{displayNameOf(r.role)}</p>
+                <p className="text-sm font-semibold">
+                  {displayNameOf(r.role)}{" "}
+                  <span className="text-[10px] font-medium text-muted">
+                    · {KIND_LABEL[r.kind]}
+                  </span>
+                </p>
                 <p className="text-[11px] text-muted">
-                  {online ? "Đang online" : "Ngoại tuyến"} · {formatDateTimeVi(r.updatedAt)}
+                  {r.position
+                    ? `${online ? "Đang online" : "Ngoại tuyến"} · ${formatDateTimeVi(r.position.updatedAt)}`
+                    : "Chưa từng chia sẻ vị trí"}
                 </p>
               </div>
-              <span className="text-[11px] tabular-nums text-muted">
-                {r.lat.toFixed(3)}, {r.lng.toFixed(3)}
-              </span>
+              {r.position && (
+                <span className="text-[11px] tabular-nums text-muted">
+                  {r.position.lat.toFixed(3)}, {r.position.lng.toFixed(3)}
+                </span>
+              )}
             </div>
             <RevokeButton role={r.role} />
           </div>
