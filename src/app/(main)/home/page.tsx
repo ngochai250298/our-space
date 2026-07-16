@@ -72,7 +72,7 @@ const MENU = [
     href: "/bucket-list",
     icon: ClipboardList,
     tint: "bg-amber-100 text-amber-500 dark:bg-amber-950 dark:text-amber-300",
-    title: "Bucket List",
+    title: "Mục tiêu 2 đứa",
     subtitle: "Những điều muốn cùng làm",
   },
   {

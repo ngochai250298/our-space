@@ -833,7 +833,7 @@ function ContentSection() {
     { key: "letters", label: "Thư", count: letters.items.length },
     { key: "diary", label: "Nhật ký", count: diary.entries.length },
     { key: "photos", label: "Ảnh", count: gallery.photos.length },
-    { key: "bucket", label: "Bucket", count: bucket.items.length },
+    { key: "bucket", label: "Mục tiêu", count: bucket.items.length },
     { key: "openwhen", label: "Open When", count: openwhen.items.length },
   ];
 

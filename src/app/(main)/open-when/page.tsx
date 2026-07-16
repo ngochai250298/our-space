@@ -31,12 +31,13 @@ export default function OpenWhenPage() {
   const [label, setLabel] = useState("");
   const [body, setBody] = useState("");
 
-  // Couple-private section — family accounts are sent back home.
+  // Couple-private section — everyone else is sent back home. Checked against
+  // "couple" rather than a list of other groups, so a new group can't slip in.
   useEffect(() => {
-    if (session?.kind === "family") router.replace("/home");
+    if (session && session.kind !== "couple") router.replace("/home");
   }, [session, router]);
 
-  if (!session || session.kind === "family") return null;
+  if (!session || session.kind !== "couple") return null;
 
   const create = () => {
     if (!label.trim() || !body.trim()) return;

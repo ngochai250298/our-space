@@ -15,12 +15,13 @@ export default function BucketListPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
 
-  // Couple-private section — family accounts are sent back home.
+  // Couple-private section — everyone else is sent back home. Checked against
+  // "couple" rather than a list of other groups, so a new group can't slip in.
   useEffect(() => {
-    if (session?.kind === "family") router.replace("/home");
+    if (session && session.kind !== "couple") router.replace("/home");
   }, [session, router]);
 
-  if (!session || session.kind === "family") return null;
+  if (!session || session.kind !== "couple") return null;
 
   const done = items.filter((i) => i.done).length;
 
@@ -32,7 +33,7 @@ export default function BucketListPage() {
 
   return (
     <div>
-      <PageHeader title="Bucket List 🧡" />
+      <PageHeader title="Mục tiêu 2 đứa 🧡" />
 
       {cloudError && (
         <p className="card mb-4 px-4 py-3 text-center text-xs leading-relaxed text-muted">
