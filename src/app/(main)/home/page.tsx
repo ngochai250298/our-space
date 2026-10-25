@@ -26,10 +26,10 @@ import {
 } from "@/lib/dates";
 import { TIMEZONES } from "@/lib/constants";
 import { formatKm } from "@/lib/geo";
-import { useCoupleDistance } from "@/hooks/useCoupleDistance";
+import { useDistanceBetween } from "@/hooks/useDistance";
 import { useFriendLinks } from "@/hooks/useFriendLinks";
 import { linkFor, partnerInLink } from "@/lib/friends";
-import { displayNameOf, genderOf } from "@/lib/auth";
+import { displayNameOf, distanceTargetFor, genderOf } from "@/lib/auth";
 
 const MENU = [
   {
@@ -89,8 +89,10 @@ export default function HomePage() {
   const { settings } = useSettings();
   const now = useNow();
   const { items: letters } = useLetters(session);
-  const km = useCoupleDistance();
   const { links } = useFriendLinks();
+  // Same person the map draws the dashed line to, so both screens agree.
+  const distanceTarget = session ? distanceTargetFor(session.role, links) : null;
+  const km = useDistanceBetween(session?.role ?? null, distanceTarget);
 
   if (!session) return null;
 
@@ -213,9 +215,13 @@ export default function HomePage() {
           </p>
         </div>
         <div>
-          <p className="text-[11px] text-muted">Khoảng cách</p>
+          <p className="text-[11px] text-muted">
+            {distanceTarget
+              ? `Cách ${displayNameOf(distanceTarget)}`
+              : "Khoảng cách"}
+          </p>
           <p className="mt-1 text-sm font-semibold text-primary-strong tabular-nums">
-            {formatKm(km)} km
+            {km === null ? "…" : `${formatKm(km)} km`}
           </p>
         </div>
         <div>

@@ -29,13 +29,41 @@ function rowToLink(row: LinkRow): FriendLink {
   };
 }
 
+// ── The pairings, cached ─────────────────────────────────────────────────────
+// Who is wired to whom decides who may see whom (see canSee in lib/auth), and
+// that question is asked while rendering — so, like the account list, the
+// links are kept in a module cache that every read refreshes.
+let linkCache: FriendLink[] = [];
+let linksLoadPromise: Promise<void> | null = null;
+
 export async function fetchFriendLinks(): Promise<FriendLink[] | null> {
   try {
     const rows = await apiGet<LinkRow[]>(ENDPOINT);
-    return rows.map(rowToLink);
+    linkCache = rows.map(rowToLink);
+    return linkCache;
   } catch {
     return null;
   }
+}
+
+/** Read the pairings once (or force a refresh). */
+export function ensureFriendLinksLoaded(force = false): Promise<void> {
+  if (!force && linksLoadPromise) return linksLoadPromise;
+  linksLoadPromise = fetchFriendLinks().then(() => undefined);
+  return linksLoadPromise;
+}
+
+/** The pairings as last read — [] until the first read lands. */
+export function cachedFriendLinks(): FriendLink[] {
+  return linkCache;
+}
+
+/** True when the admin wired these two together. */
+export function isLinkedPair(a: Role, b: Role): boolean {
+  return linkCache.some(
+    (l) =>
+      (l.roleA === a && l.roleB === b) || (l.roleA === b && l.roleB === a)
+  );
 }
 
 /** Admin: wire two friends together. */

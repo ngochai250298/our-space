@@ -1,12 +1,14 @@
 import type {
   AccountKind,
   CoupleRole,
+  FriendLink,
   Gender,
   Role,
   Session,
 } from "@/types";
 import { loadItem, saveItem, removeItem } from "@/lib/storage";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
+import { isLinkedPair, linkFor, partnerInLink } from "@/lib/friends";
 
 interface Account {
   username: string;
@@ -408,17 +410,41 @@ export function partnerName(role: Role): string {
 
 /**
  * Whether `viewer` is allowed to see `target` and the things target shares —
- * their position on the map, the photos they upload, and their name in a
- * letter's recipient picker.
+ * their position on the map, the photos they upload, their diary entries, and
+ * their name in a letter's recipient picker.
  *
- * The couple sees everyone. Family and friends are separate circles that can't
- * see each other — each sees their own circle plus Hải and Bình.
+ * Hải is the admin and sees everyone. Apart from him, the friends' circle is
+ * private: a friend only ever sees the one person the admin wired them to, and
+ * nobody else sees a friend. Bình and the family share the remaining circle.
+ *
+ * The pairings come from the cache in lib/friends, which useSession fills
+ * before the first screen renders.
  */
 export function canSee(viewer: Role, target: Role): boolean {
   if (viewer === target) return true;
-  const viewerKind = kindOf(viewer);
-  if (viewerKind === "couple") return true;
-  const targetKind = kindOf(target);
-  if (targetKind === "couple") return true;
-  return viewerKind === targetKind;
+  if (isAdmin(viewer)) return true;
+  if (kindOf(viewer) === "friend" || kindOf(target) === "friend")
+    return isLinkedPair(viewer, target);
+  return true;
+}
+
+/**
+ * The person whose distance someone sees — the number on Home and the dashed
+ * line on the map.
+ *
+ * The couple measures to each other. Anyone the admin wired to someone
+ * measures to them. Otherwise the old "everybody pairs with Bình" rule still
+ * holds, but only inside the family; a friend with nobody wired to them has
+ * no distance at all.
+ */
+export function distanceTargetFor(
+  role: Role,
+  links: FriendLink[]
+): Role | null {
+  const link = linkFor(links, role);
+  if (link) return partnerInLink(link, role);
+  const kind = kindOf(role);
+  if (kind === "couple") return partnerOf(role);
+  if (kind === "family") return "em";
+  return null;
 }

@@ -12,11 +12,17 @@ import {
   storeLocation,
   subscribeLocations,
 } from "@/lib/location";
-import { avatarOf, canSee, displayNameOf, genderOf, isAdmin } from "@/lib/auth";
+import {
+  avatarOf,
+  canSee,
+  displayNameOf,
+  distanceTargetFor,
+  genderOf,
+  isAdmin,
+} from "@/lib/auth";
 import { distanceKm, formatKm } from "@/lib/geo";
 import { placeLabel } from "@/lib/geocode";
 import { useFriendLinks } from "@/hooks/useFriendLinks";
-import { linkFor, partnerInLink } from "@/lib/friends";
 
 const UPDATE_INTERVAL_MS = 10_000;
 const COUPLE: Role[] = ["anh", "em"];
@@ -91,14 +97,10 @@ export function LiveMap({ session }: { session: Session }) {
   const [km, setKm] = useState<number | null>(null);
   const [targetInfo, setTargetInfo] = useState<{ approx: boolean; updatedAt: number } | null>(null);
   const [geoError, setGeoError] = useState("");
-  // The dashed line points to Bình — except Bình herself, whose line points to
-  // Hải, and friends the admin wired to someone, whose line points at them.
-  const myLink = linkFor(links, session.role);
-  const target: Role = myLink
-    ? partnerInLink(myLink, session.role)
-    : session.role === "em"
-      ? "anh"
-      : "em";
+  // Who the dashed line points at: the person the admin wired you to, Bình
+  // inside the family, the other half for the couple — and nobody for a
+  // friend who hasn't been wired up yet.
+  const target = distanceTargetFor(session.role, links);
 
   useEffect(() => {
     if (!ready || !linksReady || !containerRef.current || mapRef.current) return;
@@ -124,7 +126,7 @@ export function LiveMap({ session }: { session: Session }) {
       };
     });
     COUPLE.forEach((role) => {
-      if (locationsRef.current[role]) return;
+      if (locationsRef.current[role] || !canSee(me, role)) return;
       const place = settings.places[role as "anh" | "em"];
       locationsRef.current[role] = {
         role,
@@ -208,7 +210,7 @@ export function LiveMap({ session }: { session: Session }) {
         // The dashed line + distance run from the viewer to their target
         // (everyone → Bình; Bình → Hải).
         const a = locs[me];
-        const b = locs[target];
+        const b = target ? locs[target] : undefined;
         if (a && b) {
           const points: [number, number][] = [
             [a.lat, a.lng],
@@ -328,7 +330,7 @@ export function LiveMap({ session }: { session: Session }) {
       {/* Distance card — from the viewer to their target */}
       <div className="card absolute inset-x-4 bottom-4 z-[1000] px-4 py-3.5 text-center">
         <p className="text-xs text-muted">
-          Khoảng cách chúng ta
+          {target ? `Cách ${displayNameOf(target)}` : "Khoảng cách"}
           {targetInfo?.approx && (
             <span className="text-muted/80"> (gần đúng)</span>
           )}
@@ -336,12 +338,17 @@ export function LiveMap({ session }: { session: Session }) {
         <p className="mt-0.5 text-2xl font-bold tracking-tight text-ink">
           {km === null ? "…" : `${formatKm(km)} km`} <span aria-hidden>❤️</span>
         </p>
-        {targetInfo && !targetInfo.approx && (
+        {!target && (
+          <p className="mt-0.5 text-[11px] text-muted">
+            Chưa được nối dây với ai — nhờ Hải nối giúp nhé 💗
+          </p>
+        )}
+        {target && targetInfo && !targetInfo.approx && (
           <p className="mt-0.5 text-[11px] text-muted">
             Vị trí {displayNameOf(target)} cập nhật {timeAgo(targetInfo.updatedAt)}
           </p>
         )}
-        {targetInfo?.approx && (
+        {target && targetInfo?.approx && (
           <p className="mt-0.5 text-[11px] text-muted">
             Chờ {displayNameOf(target)} mở web để có vị trí thật 💗
           </p>

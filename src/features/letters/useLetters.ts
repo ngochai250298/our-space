@@ -1,6 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
 import type { Letter, Role, Session } from "@/types";
+import { canSee } from "@/lib/auth";
 import {
   useCloudCollection,
   type CloudCollection,
@@ -63,5 +65,22 @@ const SPEC: CloudSpec<Letter> = {
 };
 
 export function useLetters(session: Session | null): CloudCollection<Letter> {
-  return useCloudCollection(SPEC, session);
+  const collection = useCloudCollection(SPEC, session);
+
+  // A letter stays visible only while both ends are still in the viewer's
+  // circle — so a letter from someone the admin has since moved out of it
+  // (or a friend who was never in it) drops out of the inbox, the "sent"
+  // tab and the unread badge together. A null session is the admin
+  // screen, which is meant to see every letter.
+  const items = useMemo(
+    () =>
+      session
+        ? collection.items.filter(
+            (l) => canSee(session.role, l.from) && canSee(session.role, l.to)
+          )
+        : collection.items,
+    [collection.items, session]
+  );
+
+  return { ...collection, items };
 }

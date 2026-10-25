@@ -10,6 +10,7 @@ import {
   isSessionRevoked,
   logout,
 } from "@/lib/auth";
+import { ensureFriendLinksLoaded } from "@/lib/friends";
 
 /** How often we re-check whether the admin cut this session off. */
 const REVOKE_CHECK_MS = 60_000;
@@ -35,7 +36,13 @@ export function useSession(): Session | null {
         router.replace("/");
         return;
       }
-      await ensureAccountsLoaded(force);
+      // Both lists decide what this person is allowed to see (names, and
+      // which circle they belong to), so they are in place before the first
+      // screen renders.
+      await Promise.all([
+        ensureAccountsLoaded(force),
+        ensureFriendLinksLoaded(force),
+      ]);
       if (disposed) return;
       // Cut off from /admin, or the account was deleted outright.
       if (isSessionRevoked(current) || isAccountGone(current)) {
