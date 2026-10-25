@@ -385,6 +385,7 @@ function AccountsSection() {
       <p className="px-1 text-[11px] leading-relaxed text-muted">
         Tên hiển thị & mật khẩu lưu trên server → đổi ở đây áp dụng cho mọi
         điện thoại/máy. Tên đăng nhập (username) giữ nguyên, không đổi được.
+        Mật khẩu cũ không xem lại được ở đâu cả — quên thì đặt lại cái mới.
       </p>
     </section>
   );
@@ -545,19 +546,22 @@ function AccountEditor({
   onDeleted: () => void;
 }) {
   const [displayName, setDisplayName] = useState(account.displayName);
-  const [password, setPassword] = useState(account.password);
+  // Nobody can read a password any more, not even from here — this box only
+  // sets a new one, and only when something is typed in it.
+  const [newPassword, setNewPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
 
   const dirty =
-    displayName !== account.displayName || password !== account.password;
+    displayName !== account.displayName || newPassword.trim().length > 0;
 
   const save = async () => {
-    if (!displayName.trim() || !password.trim()) return;
+    if (!displayName.trim()) return;
     setStatus("saving");
     const ok = await onSave(account.role, {
       displayName: displayName.trim(),
-      password: password.trim(),
+      ...(newPassword.trim() ? { password: newPassword.trim() } : {}),
     });
+    if (ok) setNewPassword("");
     setStatus(ok ? "done" : "error");
     window.setTimeout(() => setStatus("idle"), 1500);
   };
@@ -579,9 +583,12 @@ function AccountEditor({
         onChange={(e) => setDisplayName(e.target.value)}
       />
       <Input
-        label="Mật khẩu"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
+        label="Đặt mật khẩu mới"
+        type="password"
+        autoComplete="new-password"
+        placeholder="Để trống nếu không đổi"
+        value={newPassword}
+        onChange={(e) => setNewPassword(e.target.value)}
       />
       <button
         type="button"

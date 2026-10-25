@@ -48,7 +48,6 @@ const ACCOUNTS_ENDPOINT = "/api/accounts";
 interface CloudAccount {
   username?: string;
   displayName: string;
-  password: string;
   kind?: AccountKind;
   gender?: Gender;
   avatarUrl: string | null;
@@ -68,7 +67,6 @@ interface AccountRow {
   role: Role;
   username?: string | null;
   display_name: string;
-  password: string;
   kind?: string | null;
   gender?: string | null;
   avatar_url?: string | null;
@@ -90,7 +88,6 @@ export async function ensureAccountsLoaded(force = false): Promise<void> {
       next[row.role] = {
         username: row.username ?? undefined,
         displayName: row.display_name,
-        password: row.password,
         kind: (row.kind as AccountKind | undefined) ?? undefined,
         gender: (row.gender as Gender | undefined) ?? undefined,
         avatarUrl: row.avatar_url ?? null,
@@ -125,7 +122,7 @@ function roster(): Account[] {
       role,
       username: cloud.username ?? base?.username ?? role,
       displayName: cloud.displayName,
-      password: cloud.password,
+      password: offlinePassword(role),
       kind: cloud.kind ?? base?.kind ?? "family",
       gender: cloud.gender ?? base?.gender ?? "female",
     };
@@ -176,10 +173,15 @@ export function kindOf(role: Role): AccountKind {
   return accountFor(role)?.kind ?? "family";
 }
 
-function currentPassword(account: Account): string {
-  if (cloudAccounts[account.role]) return cloudAccounts[account.role]!.password;
+/**
+ * The password this device can check on its own — the seed list above, plus
+ * any change made from this device. The real password lives in D1 and is
+ * never sent to the browser, so this is only good for signing in while the
+ * server is unreachable.
+ */
+function offlinePassword(role: Role): string {
   const overrides = loadItem<Partial<Record<Role, string>>>(PASSWORD_OVERRIDE_KEY, {});
-  return overrides[account.role] ?? account.password;
+  return overrides[role] ?? ACCOUNTS.find((a) => a.role === role)?.password ?? "";
 }
 
 /**
@@ -207,7 +209,8 @@ export async function login(
     const account = roster().find(
       (a) => a.username === username.trim().toLowerCase()
     );
-    if (!account || currentPassword(account) !== password) return null;
+    const fallback = account ? offlinePassword(account.role) : "";
+    if (!account || !fallback || fallback !== password) return null;
     const session: Session = {
       role: account.role,
       displayName: account.displayName,
@@ -303,13 +306,16 @@ export async function changePassword(
   oldPassword: string,
   newPassword: string
 ): Promise<boolean> {
-  const account = accountFor(role);
-  if (!account || currentPassword(account) !== oldPassword) return false;
-  // Prefer the shared store so the new password works on every device;
-  // keep the localStorage copy as an offline fallback.
+  // The old password is checked on the server — this device doesn't know it.
+  try {
+    await apiPost("/api/auth/password", { role, oldPassword, newPassword });
+  } catch {
+    return false;
+  }
+  // Keep a copy for signing in offline, now that the cloud one has changed.
   const overrides = loadItem<Partial<Record<Role, string>>>(PASSWORD_OVERRIDE_KEY, {});
   saveItem(PASSWORD_OVERRIDE_KEY, { ...overrides, [role]: newPassword });
-  await saveAccount(role, { password: newPassword });
+  await ensureAccountsLoaded(true);
   return true;
 }
 

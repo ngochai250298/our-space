@@ -8,14 +8,12 @@ import { allAccounts, ensureAccountsLoaded, saveAccount } from "@/lib/auth";
 export interface AdminAccount {
   role: Role;
   displayName: string;
-  password: string;
   kind: AccountKind;
 }
 
 interface AccountRow {
   role: Role;
   display_name: string;
-  password: string;
 }
 
 /** Live list of accounts for the admin screen, with a save helper. */
@@ -43,7 +41,6 @@ export function useAdminAccounts() {
         return {
           role: a.role,
           displayName: r?.display_name ?? a.displayName,
-          password: r?.password ?? "",
           kind: a.kind,
         };
       })

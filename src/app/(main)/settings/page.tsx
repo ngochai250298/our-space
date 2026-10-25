@@ -187,7 +187,7 @@ export default function SettingsPage() {
             Lưu mật khẩu mới
           </PrimaryButton>
           <p className="text-center text-[11px] text-muted">
-            Mật khẩu mới chỉ áp dụng trên thiết bị này.
+            Mật khẩu mới áp dụng cho mọi thiết bị bạn đăng nhập.
           </p>
         </div>
       </Modal>

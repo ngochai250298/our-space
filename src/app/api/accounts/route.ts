@@ -4,11 +4,15 @@ import { db, nowIso } from "@/lib/d1";
 /**
  * The account list. The whole app reads it (display names, avatars, who is
  * couple/family/friend); only /admin writes it.
+ *
+ * Passwords are deliberately NOT in this response: it answers anyone who asks,
+ * so anything in it is public. Signing in and changing a password are checked
+ * on the server instead (/api/auth/login and /api/auth/password).
  */
 export async function GET() {
   const { results } = await db()
     .prepare(
-      "SELECT role, username, display_name, password, kind, gender, avatar_url, revoked_at FROM accounts"
+      "SELECT role, username, display_name, kind, gender, avatar_url, revoked_at FROM accounts"
     )
     .all();
   return NextResponse.json(results);
