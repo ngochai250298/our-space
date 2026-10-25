@@ -18,12 +18,15 @@ import { Input, PrimaryButton } from "@/components/Field";
 import { DateField } from "@/components/DateField";
 import { useSession } from "@/hooks/useSession";
 import { useSettings } from "@/hooks/useSettings";
-import { changePassword, logout, partnerName } from "@/lib/auth";
+import { useFriendLinks } from "@/hooks/useFriendLinks";
+import { changePassword, displayNameOf, logout, partnerName } from "@/lib/auth";
+import { linkFor, partnerInLink } from "@/lib/friends";
 import { formatDateVi } from "@/lib/dates";
 
 export default function SettingsPage() {
   const session = useSession();
   const { settings, updateSettings } = useSettings();
+  const { links } = useFriendLinks();
   const router = useRouter();
   const [modal, setModal] = useState<"password" | "dates" | "about" | null>(null);
 
@@ -60,6 +63,18 @@ export default function SettingsPage() {
 
   // Only the couple owns the shared dates; family and friends just read them.
   const isCouple = session.kind === "couple";
+
+  // Who this person is paired with: the other half for the couple, whoever the
+  // admin wired them to for a friend.
+  const myLink = linkFor(links, session.role);
+  const pairedWith = myLink ? partnerInLink(myLink, session.role) : null;
+  const subtitle = isCouple
+    ? `Trưởng thành bên ${partnerName(session.role)} 💗`
+    : session.kind === "friend"
+      ? pairedWith
+        ? `Trưởng thành bên ${displayNameOf(pairedWith)} 💗`
+        : "Chưa được nối dây với ai 💗"
+      : "Thành viên gia đình 💗";
 
   const rows: Array<{
     icon: LucideIcon;
@@ -101,13 +116,7 @@ export default function SettingsPage() {
         <AvatarUploader role={session.role} size="lg" />
         <div>
           <p className="text-sm font-semibold">{session.displayName}</p>
-          <p className="text-xs text-muted">
-            {isCouple
-              ? `Trưởng thành bên ${partnerName(session.role)} 💗`
-              : session.kind === "friend"
-                ? "Bạn bè của Hải & Bình 💗"
-                : "Thành viên gia đình 💗"}
-          </p>
+          <p className="text-xs text-muted">{subtitle}</p>
           <p className="mt-0.5 text-[11px] text-muted">Chạm ảnh để đổi 📷</p>
         </div>
       </section>
