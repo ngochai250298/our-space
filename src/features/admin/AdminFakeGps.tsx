@@ -10,7 +10,7 @@ import type * as LeafletNS from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Role } from "@/types";
 import { allAccounts, avatarOf, displayNameOf, genderOf } from "@/lib/auth";
-import { getSupabase } from "@/lib/supabase";
+import { apiGet, apiPut } from "@/lib/api";
 
 // Ho Chi Minh City — a sensible default when a person has no fix yet.
 const DEFAULT_CENTER: [number, number] = [10.7769, 106.7009];
@@ -129,14 +129,11 @@ export function AdminFakeGps() {
         pinRef.current = pin;
 
         // Everyone's current position seeds the markers + centres the view.
-        const sb = getSupabase();
-        if (sb) {
-          const { data } = await sb.from("locations").select("role,lat,lng");
-          if (!disposed) {
-            (data as LocRow[] | null)?.forEach((r) => {
-              knownRef.current[r.role] = [r.lat, r.lng];
-            });
-          }
+        const rows = await apiGet<LocRow[]>("/api/locations").catch(() => null);
+        if (!disposed) {
+          rows?.forEach((r) => {
+            knownRef.current[r.role] = [r.lat, r.lng];
+          });
         }
         if (disposed) return;
 
@@ -185,25 +182,14 @@ export function AdminFakeGps() {
   };
 
   const save = async () => {
-    const sb = getSupabase();
-    if (!sb) {
-      setStatus("error");
-      return;
-    }
     setStatus("saving");
     const [lat, lng] = posRef.current;
-    const { error } = await sb.from("locations").upsert({
-      role,
-      lat,
-      lng,
-      accuracy: 20,
-      updated_at: new Date().toISOString(),
-    });
-    if (error) {
-      setStatus("error");
-    } else {
+    try {
+      await apiPut(`/api/locations/${role}`, { lat, lng, accuracy: 20 });
       knownRef.current[role] = [lat, lng];
       setStatus("done");
+    } catch {
+      setStatus("error");
     }
     window.setTimeout(() => setStatus("idle"), 1500);
   };

@@ -18,11 +18,10 @@ interface OpenWhenRow {
 }
 
 const SPEC: CloudSpec<OpenWhenEnvelope> = {
-  table: "open_when",
+  endpoint: "/api/open-when",
   localKey: "openWhen",
   errorHint:
-    "Phong bì đang lưu tạm trên thiết bị — chạy file supabase/migration3_letters_openwhen_bucket.sql trong Supabase để hai người cùng thấy.",
-  orderColumn: "created_at",
+    "Phong bì đang lưu tạm trên thiết bị — thử tải lại trang để đồng bộ lại.",
   fromRow: (raw) => {
     const row = raw as unknown as OpenWhenRow;
     return {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { AccountKind, Role } from "@/types";
-import { getSupabase, liveTopic } from "@/lib/supabase";
+import { apiGet } from "@/lib/api";
 import { allAccounts, ensureAccountsLoaded } from "@/lib/auth";
 
 export interface PresenceRow {
@@ -20,6 +20,9 @@ interface LocationRow {
   updated_at: string;
 }
 
+/** Slow tick so the online/offline badge ages out even when nobody moves. */
+const REFRESH_MS = 30_000;
+
 /**
  * Everyone in the house with their last known position, refreshed on demand.
  *
@@ -33,21 +36,17 @@ export function useAdminStatus() {
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
-    const sb = getSupabase();
-    if (!sb) {
-      setError("Chưa cấu hình Supabase.");
-      setReady(true);
-      return;
-    }
     await ensureAccountsLoaded(true);
-    const { data, error: err } = await sb.from("locations").select("*");
-    if (err || !data) {
-      setError("Chưa đọc được bảng locations.");
+    let locations: LocationRow[];
+    try {
+      locations = await apiGet<LocationRow[]>("/api/locations");
+    } catch {
+      setError("Chưa đọc được vị trí.");
       setReady(true);
       return;
     }
     const byRole = new Map(
-      (data as LocationRow[]).map((r) => [
+      locations.map((r) => [
         r.role,
         {
           lat: r.lat,
@@ -70,24 +69,8 @@ export function useAdminStatus() {
 
   useEffect(() => {
     void refresh();
-    // Realtime: any location write pushes an update instantly.
-    const sb = getSupabase();
-    const channel = sb
-      ? sb
-          .channel(liveTopic("admin-locations-live"))
-          .on(
-            "postgres_changes",
-            { event: "*", schema: "public", table: "locations" },
-            () => void refresh()
-          )
-          .subscribe()
-      : null;
-    // Slow tick so the online/offline badge still ages out when nobody moves.
-    const id = window.setInterval(() => void refresh(), 30_000);
-    return () => {
-      window.clearInterval(id);
-      if (sb && channel) void sb.removeChannel(channel);
-    };
+    const id = window.setInterval(() => void refresh(), REFRESH_MS);
+    return () => window.clearInterval(id);
   }, [refresh]);
 
   return { rows, ready, error, refresh };

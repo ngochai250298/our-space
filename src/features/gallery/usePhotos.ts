@@ -42,7 +42,7 @@ export function usePhotos(session: Session | null): UsePhotos {
       setCloudError("");
     } catch {
       setCloudError(
-        "Chưa kết nối được kho ảnh — hãy chạy file supabase/migration2_gallery.sql trong Supabase SQL Editor."
+        "Chưa kết nối được kho ảnh — không kết nối được server, thử tải lại trang."
       );
     } finally {
       setCloudReady(true);

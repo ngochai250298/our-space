@@ -9,7 +9,6 @@ import {
   CalendarHeart,
   Info,
   ChevronRight,
-  RadioTower,
   type LucideIcon,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -21,17 +20,12 @@ import { useSession } from "@/hooks/useSession";
 import { useSettings } from "@/hooks/useSettings";
 import { changePassword, logout, partnerName } from "@/lib/auth";
 import { formatDateVi } from "@/lib/dates";
-import {
-  getSupabaseConfig,
-  setSupabaseConfig,
-  testSupabaseConnection,
-} from "@/lib/supabase";
 
 export default function SettingsPage() {
   const session = useSession();
   const { settings, updateSettings } = useSettings();
   const router = useRouter();
-  const [modal, setModal] = useState<"password" | "dates" | "sync" | "about" | null>(null);
+  const [modal, setModal] = useState<"password" | "dates" | "about" | null>(null);
 
   const [oldPw, setOldPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -41,11 +35,6 @@ export default function SettingsPage() {
   const [nextMeeting, setNextMeeting] = useState(settings.nextMeeting);
   const [datesSaved, setDatesSaved] = useState(false);
 
-  const [syncUrl, setSyncUrl] = useState("");
-  const [syncKey, setSyncKey] = useState("");
-  const [syncMessage, setSyncMessage] = useState("");
-  const [syncBusy, setSyncBusy] = useState(false);
-  const syncEnabled = getSupabaseConfig() !== null;
 
   if (!session) return null;
 
@@ -69,25 +58,6 @@ export default function SettingsPage() {
     }, 900);
   };
 
-  const submitSync = async () => {
-    setSyncBusy(true);
-    setSyncMessage("");
-    if (!syncUrl.trim() || !syncKey.trim()) {
-      setSupabaseConfig(null);
-      setSyncMessage("Đã tắt đồng bộ.");
-      setSyncBusy(false);
-      return;
-    }
-    setSupabaseConfig({ url: syncUrl.trim(), anonKey: syncKey.trim() });
-    const error = await testSupabaseConnection();
-    if (error) {
-      setSyncMessage(error);
-    } else {
-      setSyncMessage("✅ Kết nối thành công! Vị trí thật sẽ được đồng bộ.");
-    }
-    setSyncBusy(false);
-  };
-
   // Only the couple owns the shared dates; family and friends just read them.
   const isCouple = session.kind === "couple";
 
@@ -103,18 +73,6 @@ export default function SettingsPage() {
       onClick: () => {
         setPwMessage("");
         setModal("password");
-      },
-    },
-    {
-      icon: RadioTower,
-      label: "Đồng bộ vị trí",
-      badge: syncEnabled ? "Đang bật" : "Chưa bật",
-      onClick: () => {
-        const current = getSupabaseConfig();
-        setSyncUrl(current?.url ?? "");
-        setSyncKey(current?.anonKey ?? "");
-        setSyncMessage("");
-        setModal("sync");
       },
     },
     // Anniversary & next meeting are the couple's — hidden from everyone else.
@@ -252,44 +210,6 @@ export default function SettingsPage() {
           </PrimaryButton>
           <p className="text-center text-[11px] text-muted">
             Chỉ Hải và Bình chỉnh được — ngày này hiện chung cho cả nhà.
-          </p>
-        </div>
-      </Modal>
-
-      {/* Location sync */}
-      <Modal
-        open={modal === "sync"}
-        title="Đồng bộ vị trí thật 📡"
-        onClose={() => setModal(null)}
-      >
-        <div className="space-y-4">
-          <p className="text-xs leading-relaxed text-muted">
-            Để hai người thấy <b>vị trí thật</b> của nhau trên bản đồ, cần một
-            &ldquo;hộp thư chung&rdquo; miễn phí trên supabase.com. Tạo project,
-            chạy file <code>supabase/migration.sql</code> trong SQL Editor, rồi
-            dán 2 dòng dưới đây — <b>cả hai điện thoại phải dán cùng nội dung</b>.
-          </p>
-          <Input
-            label="Project URL"
-            type="url"
-            placeholder="https://xxxx.supabase.co"
-            value={syncUrl}
-            onChange={(e) => setSyncUrl(e.target.value)}
-          />
-          <Input
-            label="Anon key"
-            placeholder="eyJhbGciOi..."
-            value={syncKey}
-            onChange={(e) => setSyncKey(e.target.value)}
-          />
-          {syncMessage && (
-            <p className="text-xs leading-relaxed text-primary-strong">{syncMessage}</p>
-          )}
-          <PrimaryButton type="button" onClick={() => void submitSync()} disabled={syncBusy}>
-            {syncBusy ? "Đang kiểm tra..." : "Lưu & kiểm tra kết nối"}
-          </PrimaryButton>
-          <p className="text-center text-[11px] text-muted">
-            Xóa trống cả hai ô rồi bấm Lưu để tắt đồng bộ.
           </p>
         </div>
       </Modal>

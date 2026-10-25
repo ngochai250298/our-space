@@ -7,17 +7,18 @@ import { canSee } from "@/lib/auth";
 import { loadItem, saveItem } from "@/lib/storage";
 import {
   addCloudDiary,
-  cloudDiaryEnabled,
   deleteCloudDiary,
   listCloudDiary,
-  subscribeDiary,
   updateCloudDiary,
 } from "@/features/diary/diaryService";
+
+/** D1 has no realtime channel, so the list is re-read on a short timer. */
+const REFRESH_MS = 5000;
 
 interface UseDiary {
   entries: DiaryEntry[];
   ready: boolean;
-  /** Set when the cloud is configured but the diary table isn't ready yet. */
+  /** Set when the server can't be reached and entries stay on the device. */
   cloudError: string;
   addEntry: (entry: {
     date: string;
@@ -32,7 +33,6 @@ interface UseDiary {
 }
 
 export function useDiary(session: Session | null): UseDiary {
-  const cloud = cloudDiaryEnabled();
   const local = useCollection<DiaryEntry>("diary");
   const [cloudEntries, setCloudEntries] = useState<DiaryEntry[]>([]);
   const [cloudReady, setCloudReady] = useState(false);
@@ -45,7 +45,7 @@ export function useDiary(session: Session | null): UseDiary {
       setCloudError("");
     } catch {
       setCloudError(
-        "Nhật ký đang lưu tạm trên thiết bị — chạy file supabase/migration2_gallery.sql trong Supabase để lưu vĩnh viễn trên server."
+        "Nhật ký đang lưu tạm trên thiết bị — không kết nối được server, thử tải lại trang."
       );
     } finally {
       setCloudReady(true);
@@ -53,14 +53,14 @@ export function useDiary(session: Session | null): UseDiary {
   }, []);
 
   useEffect(() => {
-    if (!cloud) return;
     void refresh();
-    return subscribeDiary(() => void refresh());
-  }, [cloud, refresh]);
+    const timer = window.setInterval(() => void refresh(), REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
 
   // One-time move of on-device entries up to the cloud (keeps their dates).
   useEffect(() => {
-    if (!cloud || !session || migratingRef.current) return;
+    if (!session || migratingRef.current) return;
     const stored = loadItem<DiaryEntry[]>("diary", []);
     // Only text/local entries live in localStorage; cloud rows have UUID ids.
     if (!stored.length) return;
@@ -81,30 +81,30 @@ export function useDiary(session: Session | null): UseDiary {
           );
           saveItem("diary", remaining);
         } catch {
-          break; // Cloud not ready yet — try again next visit.
+          break; // Server not reachable yet — try again next visit.
         }
       }
       await refresh();
       migratingRef.current = false;
     })();
-  }, [cloud, session, refresh]);
+  }, [session, refresh]);
 
   const addEntry = useCallback(
     async (entry: { date: string; content: string; photos: string[] }) => {
       if (!session) return;
-      if (cloud && !cloudError) {
-        await addCloudDiary({ author: session.role, ...entry });
-        await refresh();
-      } else {
+      if (cloudError) {
         local.add({
           author: session.role,
           ...entry,
           createdAt: Date.now(),
           updatedAt: Date.now(),
         });
+      } else {
+        await addCloudDiary({ author: session.role, ...entry });
+        await refresh();
       }
     },
-    [cloud, cloudError, local, refresh, session]
+    [cloudError, local, refresh, session]
   );
 
   const updateEntry = useCallback(
@@ -134,14 +134,20 @@ export function useDiary(session: Session | null): UseDiary {
     [cloudEntries, local, refresh]
   );
 
-  const all = cloud ? [...local.items, ...cloudEntries] : local.items;
+  const all = [...local.items, ...cloudEntries];
   // An entry belongs to its author's circle: family and friends don't read each
   // other's, the couple reads everything. `session` is null on the admin screen,
   // which is meant to see every entry.
   const entries = session
     ? all.filter((e) => canSee(session.role, e.author))
     : all;
-  const ready = cloud ? cloudReady && local.ready : local.ready;
 
-  return { entries, ready, cloudError, addEntry, updateEntry, removeEntry };
+  return {
+    entries,
+    ready: cloudReady && local.ready,
+    cloudError,
+    addEntry,
+    updateEntry,
+    removeEntry,
+  };
 }

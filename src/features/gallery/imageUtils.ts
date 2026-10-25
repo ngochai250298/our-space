@@ -1,6 +1,6 @@
 /**
  * Downscales an image file to keep localStorage small (max ~1280px, JPEG).
- * When Supabase Storage is wired up, this can be replaced by a direct upload.
+ * Now that R2 is wired up, this is only the resize step before the upload.
  */
 export function fileToDataUrl(file: File, maxSize = 1280): Promise<string> {
   return new Promise((resolve, reject) => {

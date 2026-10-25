@@ -29,7 +29,7 @@ export function PhotoLightbox({
     if (!src || downloading) return;
     setDownloading(true);
     try {
-      // Fetch as blob so the download works for remote (Supabase) URLs too.
+      // Fetch as blob so the download works for remote (/api/storage) URLs too.
       const blob = await (await fetch(src)).blob();
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);

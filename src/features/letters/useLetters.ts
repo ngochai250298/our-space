@@ -20,11 +20,10 @@ interface LetterRow {
 }
 
 const SPEC: CloudSpec<Letter> = {
-  table: "letters",
+  endpoint: "/api/letters",
   localKey: "letters",
   errorHint:
-    "Thư đang lưu tạm trên thiết bị — chạy file supabase/migration3_letters_openwhen_bucket.sql trong Supabase để hai người cùng thấy.",
-  orderColumn: "created_at",
+    "Thư đang lưu tạm trên thiết bị — thử tải lại trang để đồng bộ lại.",
   fromRow: (raw) => {
     const row = raw as unknown as LetterRow;
     return {

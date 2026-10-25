@@ -26,7 +26,7 @@ export function AvatarUploader({ role, size = "lg" }: Props) {
     try {
       const dataUrl = await fileToSquareDataUrl(file);
       const url = await uploadAvatar(dataUrl, role);
-      if (!url) setError("Không lưu được ảnh — đã chạy migration8 chưa?");
+      if (!url) setError("Không lưu được ảnh — thử lại nhé.");
     } catch {
       setError("Không xử lý được ảnh này.");
     } finally {

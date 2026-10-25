@@ -72,7 +72,7 @@ export default function DiaryPage() {
       let photos = values.photos;
       const newOnes = photos.filter((p) => p.startsWith("data:"));
       if (cloudGalleryEnabled() && !diary.cloudError && newOnes.length) {
-        // Ảnh mới → đưa lên Supabase Storage, đồng thời tự vào Album kỷ niệm.
+        // Ảnh mới → đưa lên R2 qua /api/gallery, đồng thời tự vào Album kỷ niệm.
         const uploaded = new Map<string, string>();
         for (const dataUrl of newOnes) {
           const { url } = await uploadCloudPhoto(dataUrl, DIARY_ALBUM, session.role);

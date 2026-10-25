@@ -1,9 +1,9 @@
 "use client";
 
 import type { FriendLink, Role } from "@/types";
-import { getSupabase } from "@/lib/supabase";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 
-const TABLE = "friend_links";
+const ENDPOINT = "/api/friend-links";
 
 interface LinkRow {
   id: string;
@@ -30,11 +30,12 @@ function rowToLink(row: LinkRow): FriendLink {
 }
 
 export async function fetchFriendLinks(): Promise<FriendLink[] | null> {
-  const sb = getSupabase();
-  if (!sb) return null;
-  const { data, error } = await sb.from(TABLE).select("*");
-  if (error || !data) return null;
-  return (data as LinkRow[]).map(rowToLink);
+  try {
+    const rows = await apiGet<LinkRow[]>(ENDPOINT);
+    return rows.map(rowToLink);
+  } catch {
+    return null;
+  }
 }
 
 /** Admin: wire two friends together. */
@@ -42,26 +43,30 @@ export async function linkFriends(
   a: Role,
   b: Role
 ): Promise<{ ok: boolean; error?: string }> {
-  const sb = getSupabase();
-  if (!sb) return { ok: false, error: "Chưa cấu hình Supabase." };
   if (a === b) return { ok: false, error: "Phải chọn hai người khác nhau." };
   const [roleA, roleB] = orderPair(a, b);
-  const { error } = await sb.from(TABLE).insert({ role_a: roleA, role_b: roleB });
-  if (error)
+  try {
+    await apiPost(ENDPOINT, { role_a: roleA, role_b: roleB });
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
     return {
       ok: false,
-      error: error.message.includes("duplicate")
+      // The UNIQUE (role_a, role_b) constraint answers with "duplicate".
+      error: message.includes("duplicate")
         ? "Hai người này đã được nối dây rồi."
-        : `Không nối được — đã chạy migration9_friends.sql chưa? (${error.message})`,
+        : `Không nối được — ${message || "lỗi không rõ."}`,
     };
-  return { ok: true };
+  }
 }
 
 export async function unlinkFriends(id: string): Promise<boolean> {
-  const sb = getSupabase();
-  if (!sb) return false;
-  const { error } = await sb.from(TABLE).delete().eq("id", id);
-  return !error;
+  try {
+    await apiDelete(`${ENDPOINT}/${id}`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Admin: set the day a linked pair started dating. */
@@ -69,13 +74,12 @@ export async function setLinkAnniversary(
   id: string,
   anniversary: string
 ): Promise<boolean> {
-  const sb = getSupabase();
-  if (!sb) return false;
-  const { error } = await sb
-    .from(TABLE)
-    .update({ anniversary: anniversary || null })
-    .eq("id", id);
-  return !error;
+  try {
+    await apiPatch(`${ENDPOINT}/${id}`, { anniversary: anniversary || null });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** The link a person belongs to, if the admin wired them to someone. */

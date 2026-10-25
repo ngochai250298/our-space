@@ -4,7 +4,7 @@ import { STORAGE_PREFIX } from "@/lib/constants";
 
 /**
  * Typed localStorage helpers. All app data lives under the "ourspace." prefix
- * so it can later be swapped for a Supabase-backed repository without touching
+ * so it can be swapped for a server-backed repository without touching
  * feature code.
  */
 

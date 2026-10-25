@@ -15,11 +15,10 @@ interface BucketRow {
 }
 
 const SPEC: CloudSpec<BucketItem> = {
-  table: "bucket_list",
+  endpoint: "/api/bucket-list",
   localKey: "bucketList",
   errorHint:
-    "Danh sách đang lưu tạm trên thiết bị — chạy file supabase/migration3_letters_openwhen_bucket.sql trong Supabase để hai người cùng thấy.",
-  orderColumn: "created_at",
+    "Danh sách đang lưu tạm trên thiết bị — thử tải lại trang để đồng bộ lại.",
   fromRow: (raw) => {
     const row = raw as unknown as BucketRow;
     return {

@@ -1,35 +1,36 @@
 "use client";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Photo, Role } from "@/types";
-import { getSupabase, liveTopic } from "@/lib/supabase";
+import { apiGet, apiDelete } from "@/lib/api";
 
 /**
- * Cloud gallery: files live in the Supabase Storage bucket "photos",
- * metadata in the "gallery" table (see supabase/migration2_gallery.sql).
- * One person uploads → the other sees it instantly via realtime.
+ * Cloud gallery: files live in the R2 bucket, metadata in the D1 "gallery"
+ * table, both behind /api/gallery. The route hands back a /api/storage URL
+ * for each row, so the bucket itself stays private.
  */
-const BUCKET = "photos";
-
 interface GalleryRow {
   id: string;
   album: string;
+  url: string;
   storage_path: string;
   caption: string | null;
   uploaded_by: Role;
   created_at: string;
 }
 
+/** No realtime channel on D1 — the gallery polls instead. */
+const POLL_MS = 5000;
+
+/** Kept for the call sites: the cloud is always there now. */
 export function cloudGalleryEnabled(): boolean {
-  return getSupabase() !== null;
+  return true;
 }
 
-function rowToPhoto(row: GalleryRow, sb: SupabaseClient): Photo {
-  const { data } = sb.storage.from(BUCKET).getPublicUrl(row.storage_path);
+function rowToPhoto(row: GalleryRow): Photo {
   return {
     id: row.id,
     album: row.album,
-    url: data.publicUrl,
+    url: row.url,
     storagePath: row.storage_path,
     caption: row.caption ?? undefined,
     uploadedBy: row.uploaded_by,
@@ -38,56 +39,31 @@ function rowToPhoto(row: GalleryRow, sb: SupabaseClient): Photo {
 }
 
 export async function listCloudPhotos(): Promise<Photo[]> {
-  const sb = getSupabase();
-  if (!sb) return [];
-  const { data, error } = await sb
-    .from("gallery")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data as GalleryRow[]).map((row) => rowToPhoto(row, sb));
+  const rows = await apiGet<GalleryRow[]>("/api/gallery");
+  return rows.map(rowToPhoto);
 }
 
 export async function uploadCloudPhoto(
   dataUrl: string,
   album: string,
   uploadedBy: Role
-): Promise<{ url: string; storagePath: string }> {
-  const sb = getSupabase();
-  if (!sb) throw new Error("Chưa cấu hình đồng bộ.");
+): Promise<{ id: string; url: string; storagePath: string }> {
   const blob = await (await fetch(dataUrl)).blob();
-  const path = `${uploadedBy}/${Date.now()}-${Math.floor(Math.random() * 1e6)}.jpg`;
-  const { error: uploadError } = await sb.storage
-    .from(BUCKET)
-    .upload(path, blob, { contentType: "image/jpeg" });
-  if (uploadError) throw new Error(uploadError.message);
-  const { error: insertError } = await sb
-    .from("gallery")
-    .insert({ album, storage_path: path, uploaded_by: uploadedBy });
-  if (insertError) throw new Error(insertError.message);
-  const { data } = sb.storage.from(BUCKET).getPublicUrl(path);
-  return { url: data.publicUrl, storagePath: path };
+  const form = new FormData();
+  form.set("file", blob, "photo.jpg");
+  form.set("album", album);
+  form.set("uploadedBy", uploadedBy);
+  const res = await fetch("/api/gallery", { method: "POST", body: form });
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
 }
 
 export async function deleteCloudPhoto(photo: Photo): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) return;
-  if (photo.storagePath)
-    await sb.storage.from(BUCKET).remove([photo.storagePath]);
-  await sb.from("gallery").delete().eq("id", photo.id);
+  await apiDelete(`/api/gallery/${photo.id}`).catch(() => {});
 }
 
 /** Refreshes when either person adds/removes a photo. */
 export function subscribeGallery(onChange: () => void): () => void {
-  const sb = getSupabase();
-  if (!sb) return () => {};
-  const channel = sb
-    .channel(liveTopic("gallery-live"))
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "gallery" },
-      onChange
-    )
-    .subscribe();
-  return () => void sb.removeChannel(channel);
+  const timer = window.setInterval(onChange, POLL_MS);
+  return () => window.clearInterval(timer);
 }

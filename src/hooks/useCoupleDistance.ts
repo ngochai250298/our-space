@@ -11,7 +11,7 @@ import { distanceKm } from "@/lib/geo";
 
 /**
  * The real distance between the two of you — the same numbers the map uses:
- * last known GPS fixes (local + Supabase), falling back to the home cities
+ * last known GPS fixes (local + server), falling back to the home cities
  * from Settings only when no fix exists yet. Live-updates whenever a fresher
  * position is stored (own 10s pushes or cloud refresh).
  */

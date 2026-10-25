@@ -11,6 +11,22 @@
 		"directory": ".open-next/assets",
 		"binding": "ASSETS"
 	},
+	// Diary, letters, accounts… everything the app stores (schema: d1/schema.sql)
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "our-space-db",
+			"database_id": "1e2097f3-570d-4d46-92b2-fd33afb6c637"
+		}
+	],
+	// Gallery photos + avatars. The bucket stays private; files are served
+	// through /api/storage/<key>.
+	"r2_buckets": [
+		{
+			"binding": "PHOTOS_BUCKET",
+			"bucket_name": "our-space-photos"
+		}
+	],
 	"services": [
 		{
 			// Self-reference service binding, the service name must match the worker name

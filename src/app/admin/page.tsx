@@ -83,8 +83,8 @@ function AdminGate({ onOk }: { onOk: () => void }) {
 
   const submit = async () => {
     setBusy(true);
-    // The password lives on Supabase now (changeable from inside /admin), with
-    // the config.ts constant as the offline fallback.
+    // The password lives on the server now (changeable from inside /admin),
+    // with the config.ts constant as the offline fallback.
     const expected = await currentAdminPassword();
     setBusy(false);
     if (username.trim() === ADMIN_USERNAME && password === expected) {
@@ -356,7 +356,7 @@ function AdminPasswordSection() {
         {busy ? "Đang lưu…" : "Đổi mật khẩu"}
       </PrimaryButton>
       <p className="text-[11px] leading-relaxed text-muted">
-        Mật khẩu lưu trên Supabase → đổi ở đây là áp dụng ngay, không cần deploy
+        Mật khẩu lưu trên server → đổi ở đây là áp dụng ngay, không cần deploy
         lại. ⚠️ Đây vẫn là lớp chặn phía trình duyệt, không phải bảo mật thật.
       </p>
     </section>
@@ -383,7 +383,7 @@ function AccountsSection() {
         />
       ))}
       <p className="px-1 text-[11px] leading-relaxed text-muted">
-        Tên hiển thị & mật khẩu lưu trên Supabase → đổi ở đây áp dụng cho mọi
+        Tên hiển thị & mật khẩu lưu trên server → đổi ở đây áp dụng cho mọi
         điện thoại/máy. Tên đăng nhập (username) giữ nguyên, không đổi được.
       </p>
     </section>
@@ -1042,7 +1042,7 @@ function RevokeButton({ role }: { role: Role }) {
         : status === "done"
           ? "Đã ngắt ✓"
           : status === "error"
-            ? "Lỗi — đã chạy migration9 chưa?"
+            ? "Lỗi — thử lại nhé."
             : "Ngắt đăng nhập"}
     </button>
   );

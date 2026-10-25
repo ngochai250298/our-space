@@ -1,10 +1,6 @@
 "use client";
 
 import type { Role } from "@/types";
-import { getSupabase } from "@/lib/supabase";
-import { saveAccount } from "@/lib/auth";
-
-const BUCKET = "photos";
 
 /** Center-crops an image file to a square and downscales it to `size` px. */
 export function fileToSquareDataUrl(file: File, size = 256): Promise<string> {
@@ -36,23 +32,20 @@ export function fileToSquareDataUrl(file: File, size = 256): Promise<string> {
 }
 
 /**
- * Uploads a square avatar to Storage and saves its URL on the account, so it
- * shows everywhere (letters, map, profile…). Returns the URL or null on error.
+ * Sends a square avatar to /api/avatar, which stores the file in R2 and saves
+ * its URL on the account — so it shows everywhere (letters, map, profile…).
+ * Returns the URL, or null when the upload failed.
  */
 export async function uploadAvatar(
   dataUrl: string,
   role: Role
 ): Promise<string | null> {
-  const sb = getSupabase();
-  if (!sb) return null;
   const blob = await (await fetch(dataUrl)).blob();
-  // Unique path → always an insert (no Storage "update" policy needed).
-  const path = `avatars/${role}-${Date.now()}.jpg`;
-  const { error } = await sb.storage
-    .from(BUCKET)
-    .upload(path, blob, { contentType: "image/jpeg" });
-  if (error) return null;
-  const { data } = sb.storage.from(BUCKET).getPublicUrl(path);
-  const ok = await saveAccount(role, { avatarUrl: data.publicUrl });
-  return ok ? data.publicUrl : null;
+  const form = new FormData();
+  form.set("file", blob, "avatar.jpg");
+  form.set("role", role);
+  const res = await fetch("/api/avatar", { method: "POST", body: form });
+  if (!res.ok) return null;
+  const { url } = (await res.json()) as { url: string };
+  return url;
 }

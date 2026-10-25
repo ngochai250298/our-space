@@ -2,12 +2,15 @@
 
 import type { LiveLocation, Role } from "@/types";
 import { loadItem, saveItem } from "@/lib/storage";
-import { getSupabase, liveTopic } from "@/lib/supabase";
+import { apiGet, apiPut } from "@/lib/api";
 
 const KEY = "locations";
 
 /** A stored fix older than this is no longer treated as "real". */
 export const FRESH_MS = 10 * 60 * 1000;
+
+/** No realtime channel on D1 — the map polls instead. */
+const POLL_MS = 5000;
 
 interface LocationRow {
   role: Role;
@@ -37,10 +40,9 @@ export function rowToLocation(row: LocationRow): LiveLocation {
 }
 
 /**
- * Reads the device's real GPS position, stores it locally and pushes it to
- * Supabase when sync is configured. With `prompt: false` it stays silent —
- * it only reads when permission was already granted (used for background
- * updates outside the map screen).
+ * Reads the device's real GPS position, stores it locally and pushes it to the
+ * server. With `prompt: false` it stays silent — it only reads when permission
+ * was already granted (used for background updates outside the map screen).
  */
 export async function pushOwnLocation(
   role: Role,
@@ -76,31 +78,25 @@ export async function pushOwnLocation(
   };
   storeLocation(loc);
 
-  const sb = getSupabase();
-  if (sb)
-    await sb.from("locations").upsert({
-      role,
-      lat: loc.lat,
-      lng: loc.lng,
-      accuracy: loc.accuracy,
-      updated_at: new Date(loc.updatedAt).toISOString(),
-    });
+  // A failed push just means this fix stays on the device for now.
+  await apiPut(`/api/locations/${role}`, {
+    lat: loc.lat,
+    lng: loc.lng,
+    accuracy: loc.accuracy,
+  }).catch(() => {});
 
   return loc;
 }
 
 /**
- * Pulls the latest synced positions of both people from Supabase and stores
- * any fresher-than-local ones (which notifies every listening component).
- * No-op without a Supabase config.
+ * Pulls the latest synced positions of everyone and stores any
+ * fresher-than-local ones (which notifies every listening component).
  */
 export async function refreshLocationsFromCloud(): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) return;
-  const { data } = await sb.from("locations").select("*");
-  if (!data) return;
+  const rows = await apiGet<LocationRow[]>("/api/locations").catch(() => null);
+  if (!rows) return;
   const stored = loadStoredLocations();
-  for (const row of data as LocationRow[]) {
+  for (const row of rows) {
     const loc = rowToLocation(row);
     const existing = stored[loc.role];
     if (!existing || existing.updatedAt < loc.updatedAt || existing.approx)
@@ -109,35 +105,24 @@ export async function refreshLocationsFromCloud(): Promise<void> {
 }
 
 /**
- * Streams everyone's real positions from Supabase (initial fetch +
- * realtime). No-op without a Supabase config. Returns an unsubscribe fn.
+ * Streams everyone's real positions (one read now, then every few seconds).
+ * Returns an unsubscribe fn.
  */
 export function subscribeLocations(
   onUpdate: (loc: LiveLocation) => void
 ): () => void {
-  const sb = getSupabase();
-  if (!sb) return () => {};
-
-  void sb
-    .from("locations")
-    .select("*")
-    .then(({ data }) => {
-      (data as LocationRow[] | null)?.forEach((row) =>
-        onUpdate(rowToLocation(row))
-      );
-    });
-
-  const channel = sb
-    .channel(liveTopic("locations-live"))
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "locations" },
-      (payload) => {
-        const row = payload.new as LocationRow;
-        if (row?.role) onUpdate(rowToLocation(row));
-      }
-    )
-    .subscribe();
-
-  return () => void sb.removeChannel(channel);
+  let cancelled = false;
+  const pull = () => {
+    apiGet<LocationRow[]>("/api/locations")
+      .then((rows) => {
+        if (!cancelled) rows.forEach((row) => onUpdate(rowToLocation(row)));
+      })
+      .catch(() => {});
+  };
+  pull();
+  const timer = window.setInterval(pull, POLL_MS);
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+  };
 }

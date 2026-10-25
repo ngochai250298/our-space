@@ -6,7 +6,7 @@ import type {
   Session,
 } from "@/types";
 import { loadItem, saveItem, removeItem } from "@/lib/storage";
-import { getSupabase } from "@/lib/supabase";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 
 interface Account {
   username: string;
@@ -17,10 +17,10 @@ interface Account {
   gender: Gender;
 }
 
-// Private app — these are the accounts baked into the code. Since migration9
-// the real source of truth is the Supabase `accounts` table (the admin can add
-// people from /admin), and this list is only the offline fallback + seed, so
-// login still works if the cloud is unreachable.
+// Private app — these are the accounts baked into the code. The real source of
+// truth is the `accounts` table in D1 (the admin can add people from /admin),
+// and this list is only the offline fallback + seed, so login still works if
+// the cloud is unreachable.
 // Note: the couple's internal role ids stay "anh"/"em" (database rows
 // reference them); only usernames/display names changed.
 const ACCOUNTS: Account[] = [
@@ -36,13 +36,13 @@ const ACCOUNTS: Account[] = [
 
 const SESSION_KEY = "session";
 const PASSWORD_OVERRIDE_KEY = "passwords";
-const ACCOUNTS_TABLE = "accounts";
+const ACCOUNTS_ENDPOINT = "/api/accounts";
 
 // ── Cloud-backed accounts ────────────────────────────────────────────────────
-// The /admin page creates accounts and edits display names + passwords on
-// Supabase so a change made from one device applies to everyone. The ACCOUNTS
-// list above stays as the offline fallback (and seed), so login never breaks if
-// the table/cloud is missing.
+// The /admin page creates accounts and edits display names + passwords through
+// /api/accounts so a change made from one device applies to everyone. The
+// ACCOUNTS list above stays as the offline fallback (and seed), so login never
+// breaks if the network is missing.
 interface CloudAccount {
   username?: string;
   displayName: string;
@@ -62,28 +62,30 @@ let accountsLoadPromise: Promise<void> | null = null;
  */
 let cloudLoaded = false;
 
-/** Fetch accounts from Supabase once (or force a refresh). */
+interface AccountRow {
+  role: Role;
+  username?: string | null;
+  display_name: string;
+  password: string;
+  kind?: string | null;
+  gender?: string | null;
+  avatar_url?: string | null;
+  revoked_at?: string | null;
+}
+
+/** Fetch the accounts once (or force a refresh). */
 export async function ensureAccountsLoaded(force = false): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) return;
   if (!force && accountsLoadPromise) return accountsLoadPromise;
   accountsLoadPromise = (async () => {
-    const { data, error } = await sb.from(ACCOUNTS_TABLE).select("*");
-    if (error || !data) return;
+    let rows: AccountRow[];
+    try {
+      rows = await apiGet<AccountRow[]>(ACCOUNTS_ENDPOINT);
+    } catch {
+      return; // offline — keep whatever we had, the code list covers login
+    }
     const next: Partial<Record<Role, CloudAccount>> = {};
-    for (const row of data as Array<{
-      role: Role;
-      username?: string | null;
-      display_name: string;
-      password: string;
-      kind?: string | null;
-      gender?: string | null;
-      avatar_url?: string | null;
-      revoked_at?: string | null;
-    }>) {
+    for (const row of rows) {
       next[row.role] = {
-        // username/kind/gender/revoked_at only exist after migration9 — until
-        // then they read as undefined and the code list fills the gap.
         username: row.username ?? undefined,
         displayName: row.display_name,
         password: row.password,
@@ -115,7 +117,7 @@ function roster(): Account[] {
   return roles.map((role) => {
     const cloud = cloudAccounts[role]!;
     // The code entry still supplies username/kind/gender for rows written
-    // before migration9 added those columns.
+    // before those columns existed.
     const base = ACCOUNTS.find((a) => a.role === role);
     return {
       role,
@@ -178,29 +180,42 @@ function currentPassword(account: Account): string {
   return overrides[account.role] ?? account.password;
 }
 
-function toSession(account: Account): Session {
-  return {
-    role: account.role,
-    displayName: account.displayName,
-    kind: account.kind,
-    gender: account.gender,
-    loggedInAt: Date.now(),
-  };
-}
-
+/**
+ * Sign in on the server, so the passwords never leave D1. If the request
+ * fails (offline), fall back to the on-device roster.
+ */
 export async function login(
   username: string,
   password: string
 ): Promise<Session | null> {
-  // Pull the latest passwords/names so an admin change applies immediately.
-  await ensureAccountsLoaded(true);
-  const account = roster().find(
-    (a) => a.username === username.trim().toLowerCase()
-  );
-  if (!account || currentPassword(account) !== password) return null;
-  const session = toSession(account);
-  saveItem(SESSION_KEY, session);
-  return session;
+  try {
+    const account = await apiPost<{
+      role: Role;
+      displayName: string;
+      kind: AccountKind;
+      gender: Gender;
+    }>("/api/auth/login", { username, password });
+    const session: Session = { ...account, loggedInAt: Date.now() };
+    saveItem(SESSION_KEY, session);
+    // Pull names/avatars in the background — the session is already valid.
+    void ensureAccountsLoaded(true);
+    return session;
+  } catch {
+    await ensureAccountsLoaded(false);
+    const account = roster().find(
+      (a) => a.username === username.trim().toLowerCase()
+    );
+    if (!account || currentPassword(account) !== password) return null;
+    const session: Session = {
+      role: account.role,
+      displayName: account.displayName,
+      kind: account.kind,
+      gender: account.gender,
+      loggedInAt: Date.now(),
+    };
+    saveItem(SESSION_KEY, session);
+    return session;
+  }
 }
 
 export function getSession(): Session | null {
@@ -235,7 +250,7 @@ export function isSessionRevoked(session: Session): boolean {
 /**
  * True when this account no longer exists — the admin deleted it while the
  * person was signed in. Answers "false" until the cloud list has loaded, so a
- * device that can't reach Supabase is never signed out on a guess.
+ * device that can't reach the network is never signed out on a guess.
  */
 export function isAccountGone(session: Session): boolean {
   if (!cloudLoaded || Object.keys(cloudAccounts).length === 0) return false;
@@ -249,13 +264,13 @@ export function canDeleteAccount(role: Role): boolean {
 
 /** Admin: kick a person off every device they're signed in on. */
 export async function revokeSessions(role: Role): Promise<boolean> {
-  const sb = getSupabase();
-  if (!sb) return false;
-  const { error } = await sb
-    .from(ACCOUNTS_TABLE)
-    .update({ revoked_at: new Date().toISOString() })
-    .eq("role", role);
-  if (error) return false;
+  try {
+    await apiPatch(`${ACCOUNTS_ENDPOINT}/${role}`, {
+      revoked_at: new Date().toISOString(),
+    });
+  } catch {
+    return false;
+  }
   await ensureAccountsLoaded(true);
   return true;
 }
@@ -265,20 +280,15 @@ export async function saveAccount(
   role: Role,
   patch: { displayName?: string; password?: string; avatarUrl?: string | null }
 ): Promise<boolean> {
-  const sb = getSupabase();
-  if (!sb) return false;
-  const base = accountFor(role);
-  const row: Record<string, unknown> = {
-    role,
-    display_name: patch.displayName ?? displayNameOf(role),
-    password: patch.password ?? (base ? currentPassword(base) : ""),
-    updated_at: new Date().toISOString(),
-  };
-  // Only touch avatar_url when actually changing it, so name/password saves
-  // still work even before migration8 adds the column.
+  const row: Record<string, unknown> = {};
+  if (patch.displayName !== undefined) row.display_name = patch.displayName;
+  if (patch.password !== undefined) row.password = patch.password;
   if (patch.avatarUrl !== undefined) row.avatar_url = patch.avatarUrl;
-  const { error } = await sb.from(ACCOUNTS_TABLE).upsert(row);
-  if (error) return false;
+  try {
+    await apiPatch(`${ACCOUNTS_ENDPOINT}/${role}`, row);
+  } catch {
+    return false;
+  }
   await ensureAccountsLoaded(true);
   return true;
 }
@@ -293,11 +303,11 @@ export async function changePassword(
 ): Promise<boolean> {
   const account = accountFor(role);
   if (!account || currentPassword(account) !== oldPassword) return false;
-  // Prefer the shared cloud store so the new password works on every device;
+  // Prefer the shared store so the new password works on every device;
   // keep the localStorage copy as an offline fallback.
   const overrides = loadItem<Partial<Record<Role, string>>>(PASSWORD_OVERRIDE_KEY, {});
   saveItem(PASSWORD_OVERRIDE_KEY, { ...overrides, [role]: newPassword });
-  if (getSupabase()) await saveAccount(role, { password: newPassword });
+  await saveAccount(role, { password: newPassword });
   return true;
 }
 
@@ -326,9 +336,6 @@ export interface NewAccount {
 export async function createAccount(
   input: NewAccount
 ): Promise<{ ok: boolean; error?: string }> {
-  const sb = getSupabase();
-  if (!sb) return { ok: false, error: "Chưa cấu hình Supabase." };
-
   const username = slugify(input.username);
   const displayName = input.displayName.trim();
   const password = input.password.trim();
@@ -340,85 +347,45 @@ export async function createAccount(
   if (roster().some((a) => a.username === username || a.role === username))
     return { ok: false, error: `Tên đăng nhập "${username}" đã có người dùng.` };
 
-  const { error } = await sb.from(ACCOUNTS_TABLE).insert({
-    role: username,
-    username,
-    display_name: displayName,
-    password,
-    kind: input.kind,
-    gender: input.gender,
-    updated_at: new Date().toISOString(),
-  });
-  if (error)
+  try {
+    await apiPost(ACCOUNTS_ENDPOINT, {
+      role: username,
+      username,
+      display_name: displayName,
+      password,
+      kind: input.kind,
+      gender: input.gender,
+    });
+  } catch (err) {
     return {
       ok: false,
-      error: `Không tạo được — đã chạy migration9_friends.sql chưa? (${error.message})`,
+      error: err instanceof Error ? err.message : "Không tạo được tài khoản.",
     };
+  }
   await ensureAccountsLoaded(true);
   return { ok: true };
 }
 
-const PHOTO_BUCKET = "photos";
-
 /**
  * Admin: delete an account and everything it left behind — diary entries,
  * gallery photos (files included), letters sent AND received, Open When
- * envelopes, last position, and any friend link.
- *
- * There is no undo. Content is removed rather than orphaned, so nothing is
- * left showing a raw role id where a name used to be.
+ * envelopes, last position, and any friend link. The route does the whole
+ * clean-up in one batch; there is no undo.
  */
 export async function deleteAccount(
   role: Role
 ): Promise<{ ok: boolean; error?: string }> {
   if (!canDeleteAccount(role))
     return { ok: false, error: "Không thể xoá tài khoản của Hải hoặc Bình." };
-  const sb = getSupabase();
-  if (!sb) return { ok: false, error: "Chưa cấu hình Supabase." };
-
-  // 1. Storage files: gallery uploads (paths recorded per row) + avatars
-  //    (named "avatars/<role>-<timestamp>.jpg").
-  const { data: photoRows } = await sb
-    .from("gallery")
-    .select("storage_path")
-    .eq("uploaded_by", role);
-  const paths = ((photoRows ?? []) as Array<{ storage_path: string | null }>)
-    .map((p) => p.storage_path)
-    .filter((p): p is string => !!p);
-
-  const { data: avatarFiles } = await sb.storage
-    .from(PHOTO_BUCKET)
-    .list("avatars", { limit: 1000 });
-  const avatarPaths = (avatarFiles ?? [])
-    .filter((f) => f.name.startsWith(`${role}-`))
-    .map((f) => `avatars/${f.name}`);
-
-  const allFiles = [...paths, ...avatarPaths];
-  if (allFiles.length > 0) await sb.storage.from(PHOTO_BUCKET).remove(allFiles);
-
-  // 2. Rows that reference this person.
-  await sb.from("gallery").delete().eq("uploaded_by", role);
-  await sb.from("diary").delete().eq("author", role);
-  await sb.from("letters").delete().or(`from_role.eq.${role},to_role.eq.${role}`);
-  await sb.from("open_when").delete().eq("from_role", role);
-  await sb.from("locations").delete().eq("role", role);
-  await sb.from("friend_links").delete().or(`role_a.eq.${role},role_b.eq.${role}`);
-
-  // 3. The account itself, last — if this fails the person still exists.
-  const { error } = await sb.from("accounts").delete().eq("role", role);
-  if (error)
+  try {
+    await apiDelete(`${ACCOUNTS_ENDPOINT}/${role}`);
+  } catch (err) {
     return {
       ok: false,
-      error: `Không xoá được — đã chạy migration10_delete_account.sql chưa? (${error.message})`,
+      error: err instanceof Error ? err.message : "Không xoá được tài khoản.",
     };
-
+  }
   await ensureAccountsLoaded(true);
-  // The row is gone; if it somehow survived, say so rather than claim success.
-  if (cloudAccounts[role])
-    return {
-      ok: false,
-      error: "Xoá không thành công — tài khoản vẫn còn (thiếu policy delete?).",
-    };
   return { ok: true };
 }
 

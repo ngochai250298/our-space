@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import type { Map as LeafletMap, Marker, Polyline } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { LiveLocation, Role, Session } from "@/types";
@@ -13,7 +12,6 @@ import {
   storeLocation,
   subscribeLocations,
 } from "@/lib/location";
-import { getSupabaseConfig } from "@/lib/supabase";
 import { avatarOf, canSee, displayNameOf, genderOf, isAdmin } from "@/lib/auth";
 import { distanceKm, formatKm } from "@/lib/geo";
 import { placeLabel } from "@/lib/geocode";
@@ -93,7 +91,6 @@ export function LiveMap({ session }: { session: Session }) {
   const [km, setKm] = useState<number | null>(null);
   const [targetInfo, setTargetInfo] = useState<{ approx: boolean; updatedAt: number } | null>(null);
   const [geoError, setGeoError] = useState("");
-  const synced = getSupabaseConfig() !== null;
   // The dashed line points to Bình — except Bình herself, whose line points to
   // Hải, and friends the admin wired to someone, whose line points at them.
   const myLink = linkFor(links, session.role);
@@ -109,6 +106,7 @@ export function LiveMap({ session }: { session: Session }) {
     const me = session.role;
     let disposed = false;
     let intervalId = 0;
+    const timeouts: number[] = [];
     let unsubscribe: (() => void) | undefined;
     let onAccounts: (() => void) | undefined;
 
@@ -250,8 +248,18 @@ export function LiveMap({ session }: { session: Session }) {
       };
 
       redraw();
-      fitAll();
       (Object.keys(locationsRef.current) as Role[]).forEach(refreshLabel);
+      // Leaflet measured the container before the layout settled, so re-measure
+      // and fit once things have stopped moving.
+      for (const delay of [80, 400]) {
+        timeouts.push(
+          window.setTimeout(() => {
+            if (disposed) return;
+            map.invalidateSize();
+            fitAll();
+          }, delay)
+        );
+      }
 
       const applyLocation = (loc: LiveLocation) => {
         // Never store, draw or cache a position I'm not allowed to see — the
@@ -293,6 +301,7 @@ export function LiveMap({ session }: { session: Session }) {
     return () => {
       disposed = true;
       window.clearInterval(intervalId);
+      timeouts.forEach((id) => window.clearTimeout(id));
       unsubscribe?.();
       if (onAccounts) window.removeEventListener("ourspace:accounts", onAccounts);
       mapRef.current?.remove();
@@ -334,17 +343,7 @@ export function LiveMap({ session }: { session: Session }) {
         )}
         {targetInfo?.approx && (
           <p className="mt-0.5 text-[11px] text-muted">
-            {synced ? (
-              <>Chờ {displayNameOf(target)} mở web để có vị trí thật 💗</>
-            ) : (
-              <>
-                Bật đồng bộ trong{" "}
-                <Link href="/settings" className="font-semibold text-primary-strong underline">
-                  Settings
-                </Link>{" "}
-                để thấy vị trí thật của nhau
-              </>
-            )}
+            Chờ {displayNameOf(target)} mở web để có vị trí thật 💗
           </p>
         )}
       </div>

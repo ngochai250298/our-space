@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { AccountKind, Role } from "@/types";
-import { getSupabase } from "@/lib/supabase";
+import { apiGet } from "@/lib/api";
 import { allAccounts, ensureAccountsLoaded, saveAccount } from "@/lib/auth";
 
 export interface AdminAccount {
@@ -25,26 +25,18 @@ export function useAdminAccounts() {
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
-    const sb = getSupabase();
-    if (!sb) {
-      setError("Chưa cấu hình Supabase.");
-      setReady(true);
-      return;
-    }
-    const { data, error: err } = await sb.from("accounts").select("*");
-    if (err || !data) {
-      setError(
-        "Chưa có bảng accounts — hãy chạy supabase/migration7_accounts.sql trong Supabase."
-      );
+    let accounts: AccountRow[];
+    try {
+      accounts = await apiGet<AccountRow[]>("/api/accounts");
+    } catch {
+      setError("Không kết nối được server.");
       setReady(true);
       return;
     }
     // Refresh the shared account cache first: allAccounts() reads from it, and
-    // accounts created from here exist only on the cloud, not in the code list.
+    // accounts created from here exist only on the server, not in the code list.
     await ensureAccountsLoaded(true);
-    const byRole = new Map(
-      (data as AccountRow[]).map((r) => [r.role, r])
-    );
+    const byRole = new Map(accounts.map((r) => [r.role, r]));
     setRows(
       allAccounts().map((a) => {
         const r = byRole.get(a.role);

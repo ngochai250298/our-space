@@ -50,7 +50,7 @@ export default function LettersPage() {
   };
 
   // "Xóa" một lá thư = ẩn bản của phía mình. Chỉ khi cả hai phía đều đã ẩn
-  // thì mới thật sự xóa row khỏi Supabase.
+  // thì mới thật sự xóa row trên server.
   const hideForMe = (letter: Letter) => {
     const iAmSender = letter.from === session.role;
     const otherSideHidden = iAmSender ? letter.hiddenByTo : letter.hiddenByFrom;

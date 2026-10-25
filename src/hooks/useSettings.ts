@@ -4,19 +4,20 @@ import { useCallback, useEffect, useState } from "react";
 import type { AppSettings } from "@/types";
 import { DEFAULT_SETTINGS } from "@/lib/constants";
 import { loadItem, saveItem } from "@/lib/storage";
-import { getSupabase, liveTopic } from "@/lib/supabase";
+import { apiGet, apiPut } from "@/lib/api";
 
 const KEY = "settings";
 // When the couple's dates were last edited on THIS device (ms). Lets us ignore
 // a stale cloud read that would otherwise clobber a value we just saved.
 const EDITED_KEY = "settings.datesEditedAt";
-const TABLE = "couple_settings";
-const ROW_ID = 1;
+const ENDPOINT = "/api/settings";
+/** No realtime channel on D1 — poll the shared dates instead. */
+const REFRESH_MS = 8000;
 
 /**
  * Fields the whole house shares — the couple's dates. Only Hải or Bình edit
- * them, and they live in Supabase so every account (family included) sees the
- * same countdown. Theme and places stay per-device in localStorage.
+ * them, and they live on the server so every account (family included) sees
+ * the same countdown. Theme and places stay per-device in localStorage.
  */
 type SharedDates = Pick<
   AppSettings,
@@ -55,20 +56,16 @@ export function useSettings() {
     };
     window.addEventListener("ourspace:storage", onChange);
 
-    // Pull the couple's shared dates from the cloud, cache them locally (so the
-    // value survives offline / next load), and keep listening for live edits.
-    const sb = getSupabase();
+    // Pull the couple's shared dates from the server and cache them locally,
+    // so the value survives offline / the next load.
+    let cancelled = false;
     const pullCloud = async () => {
-      if (!sb) return;
-      const { data, error } = await sb
-        .from(TABLE)
-        .select("*")
-        .eq("id", ROW_ID)
-        .maybeSingle();
-      if (error || !data) return;
-      const row = data as Record<string, unknown>;
+      const row = await apiGet<Record<string, unknown> | null>(ENDPOINT).catch(
+        () => null
+      );
+      if (cancelled || !row) return;
       // Don't let a stale cloud value overwrite an edit we just made locally.
-      // Apply the cloud row only if it's at least as new as our last local edit.
+      // Apply the row only if it's at least as new as our last local edit.
       const cloudMs = Date.parse(String(row.updated_at ?? "")) || 0;
       const localEditedMs = loadItem<number>(EDITED_KEY, 0);
       if (localEditedMs && cloudMs < localEditedMs) return;
@@ -77,21 +74,13 @@ export function useSettings() {
       saveItem(KEY, { ...readSettings(), ...shared });
     };
 
-    const channel = sb
-      ? sb
-          .channel(liveTopic(`${TABLE}-live`))
-          .on(
-            "postgres_changes",
-            { event: "*", schema: "public", table: TABLE },
-            () => void pullCloud()
-          )
-          .subscribe()
-      : null;
     void pullCloud();
+    const timer = window.setInterval(() => void pullCloud(), REFRESH_MS);
 
     return () => {
+      cancelled = true;
       window.removeEventListener("ourspace:storage", onChange);
-      if (sb && channel) void sb.removeChannel(channel);
+      window.clearInterval(timer);
     };
   }, []);
 
@@ -105,27 +94,17 @@ export function useSettings() {
       "anniversary" in patch ||
       "nextMeeting" in patch ||
       "nextMeetingLabel" in patch;
-    const sb = getSupabase();
-    if (sb && touchesDates) {
+    if (touchesDates) {
       // Stamp this edit so a slower cloud read can't roll it back (see pullCloud).
       const editedAt = Date.now();
       saveItem(EDITED_KEY, editedAt);
-      void sb
-        .from(TABLE)
-        .upsert({
-          id: ROW_ID,
-          anniversary: next.anniversary,
-          next_meeting: next.nextMeeting,
-          next_meeting_label: next.nextMeetingLabel,
-          updated_at: new Date(editedAt).toISOString(),
-        })
-        .then(({ error }) => {
-          if (error)
-            console.warn(
-              "[useSettings] Không lưu được ngày lên Supabase — đã chạy migration5_settings.sql chưa?",
-              error.message
-            );
-        });
+      void apiPut(ENDPOINT, {
+        anniversary: next.anniversary,
+        next_meeting: next.nextMeeting,
+        next_meeting_label: next.nextMeetingLabel,
+      }).catch((err) => {
+        console.warn("[useSettings] Không lưu được ngày lên server", err);
+      });
     }
   }, []);
 

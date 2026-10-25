@@ -3,7 +3,8 @@ export type CoupleRole = "anh" | "em";
 /** Family members — restricted view (no couple-private sections). */
 export type FamilyRole = "thuong" | "thuan" | "nhinhi" | "thinh";
 /**
- * A person's id. Accounts live in Supabase and the admin can create new ones,
+ * A person's id. Accounts live in the database and the admin can create new
+ * ones,
  * so this can't be a fixed union — it's whatever `accounts.role` holds.
  * Use `kindOf()` to branch on the group instead of comparing role strings.
  */
@@ -60,7 +61,7 @@ export interface Photo {
   album: string;
   /** Public URL (cloud) or data URL (on-device fallback) */
   url: string;
-  /** Path inside the Supabase Storage bucket, when stored on the cloud */
+  /** Key inside the R2 bucket, when stored on the cloud */
   storagePath?: string;
   caption?: string;
   uploadedBy: Role;
@@ -119,9 +120,4 @@ export interface LiveLocation {
   updatedAt: number;
   /** true when this is a fallback/default position, not a real GPS fix */
   approx?: boolean;
-}
-
-export interface SupabaseConfig {
-  url: string;
-  anonKey: string;
 }
